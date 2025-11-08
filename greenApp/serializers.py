@@ -5,19 +5,19 @@ User = get_user_model()
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
-    user_type = serializers.CharField(required=True)
+    role = serializers.CharField(required=True)
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'name', 'phone', 'user_type', 'password']
+        fields = ['id', 'email', 'name', 'phone', 'role', 'password']
         extra_kwargs = {
             'password': {'write_only': True}
         }
 
     def validate(self, attrs):
-        user_type = attrs.get('user_type', 'organizer')
-        if user_type not in ['organizer', 'admin', 'sponsor']:
-            raise serializers.ValidationError("Invalid user type")
+        role = attrs.get('role', 'normal_user')
+        if role not in ['normal_user', 'farm_manager', 'super_admin']:
+            raise serializers.ValidationError("Invalid user role")
 
         return attrs
 
@@ -27,10 +27,10 @@ class CustomUserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'name', 'phone', 'country', 'organization', 'city', 'bio', 'user_type', 'last_login']
+        fields = ['id', 'email', 'name', 'phone', 'role', 'last_login']
 
 
 class UserAccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'email', 'name', 'phone', 'country', 'organization', 'city', 'bio', 'user_type',  'added_on']
+        fields = '__all__'

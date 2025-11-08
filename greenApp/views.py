@@ -131,7 +131,7 @@ class UserViewSet(viewsets.ViewSet):
         user = get_object_or_404(UserAccount, pk=pk)
 
         # Permission check
-        if request.user.user_type != "admin" and request.user.pk != user.pk:
+        if request.user.role != "super_admin" and request.user.pk != user.pk:
             raise PermissionDenied("You can only update your own account.")
 
         serializer = UserAccountSerializer(user, data=request.data)
@@ -148,7 +148,7 @@ class UserViewSet(viewsets.ViewSet):
         user = get_object_or_404(UserAccount, pk=pk)
 
         # Permission check
-        if request.user.user_type != "admin" and request.user.pk != user.pk:
+        if request.user.role != "super_admin" and request.user.pk != user.pk:
             raise PermissionDenied("You can only update your own account.")
 
         serializer = UserAccountSerializer(user, data=request.data, partial=True)
@@ -164,7 +164,7 @@ class UserViewSet(viewsets.ViewSet):
         user = get_object_or_404(UserAccount, pk=pk)
 
         # Permission check
-        if request.user.user_type != "admin" and request.user.pk != user.pk:
+        if request.user.role != "super_admin" and request.user.pk != user.pk:
             raise PermissionDenied("You can only delete your own account.")
 
         user.delete()
