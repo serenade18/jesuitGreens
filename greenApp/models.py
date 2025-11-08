@@ -34,12 +34,13 @@ class UserAccountManager(BaseUserManager):
 class UserAccount(AbstractBaseUser, PermissionsMixin):
     class Role(models.TextChoices):
         SUPER_ADMIN = "super_admin", "Super Admin"
-        FARM_MANAGER = "farm_manager", "Farm Manager"
-        NORMAL_USER = "normal_user", "Normal User"
+        FARM_ADMIN = "farm_admin", "Farm Admin"
+        AGROVET = "agrovet", "Agrovet"
+        VET = "vet", "Vet"
 
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=150)
-    role = models.CharField(max_length=20, choices=Role.choices, default=Role.NORMAL_USER)
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.FARM_ADMIN)
     phone = models.CharField(max_length=20, blank=True, null=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
@@ -52,3 +53,10 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return f"{self.name} ({self.role})"
+
+# Role Model
+class TeamRoles(models.Model):
+    id = models.AutoField(primary_key=True)
+    role_name = models.CharField(max_length=150)
+    added_on = models.DateTimeField(default=timezone.now)
+    objects = models.Manager()

@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 
+from greenApp.models import TeamRoles
+
 User = get_user_model()
 
 
@@ -15,8 +17,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, attrs):
-        role = attrs.get('role', 'normal_user')
-        if role not in ['normal_user', 'farm_manager', 'super_admin']:
+        role = attrs.get('role', 'farm_admin')
+        if role not in ['vet', 'agrovet', 'farm_admin', 'super_admin']:
             raise serializers.ValidationError("Invalid user role")
 
         return attrs
@@ -33,4 +35,10 @@ class CustomUserSerializer(serializers.ModelSerializer):
 class UserAccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
+        fields = '__all__'
+
+
+class RolesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TeamRoles
         fields = '__all__'
