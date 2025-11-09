@@ -58,5 +58,10 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
 class TeamRoles(models.Model):
     id = models.AutoField(primary_key=True)
     role_name = models.CharField(max_length=150)
+    role_description = models.TextField(null=True, blank=True)
+    permissions = models.JSONField(default=dict, blank=True)
     added_on = models.DateTimeField(default=timezone.now)
     objects = models.Manager()
+
+    def __str__(self):
+        return self.role_name

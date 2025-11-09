@@ -38,7 +38,7 @@ class UserAccountSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class RolesSerializer(serializers.ModelSerializer):
+class TeamRolesSerializer(serializers.ModelSerializer):
     class Meta:
         model = TeamRoles
         fields = '__all__'
