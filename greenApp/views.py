@@ -6,9 +6,9 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from greenApp.models import UserAccount, TeamRoles
+from greenApp.models import UserAccount, TeamRoles, Farm
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole
-from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer
+from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer
 
 
 # Create your views here.
@@ -261,6 +261,106 @@ class TeamRolesViewSet(viewsets.ModelViewSet):
             return Response({
                 "error": False,
                 "message": "Role deleted successfully"
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class FarmViewSet(viewsets.ModelViewSet):
+    permission_classes_by_action = {
+        'create': [IsFarmManagerRole],
+        'list': [IsAdminRole],
+        'destroy': [IsFarmManagerRole, IsAdminRole],
+        'update': [IsFarmManagerRole, IsAdminRole],
+        'retrieve': [IsFarmManagerRole, IsAdminRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(self.action, self.permission_classes_by_action['default'])
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def list(self, request):
+        try:
+            farm = Farm.objects.all().order_by('-id')
+            serializer = FarmSerializer(farm, many=True)
+            return Response({
+                "error": False,
+                "message": "All farms Data",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request, *args, **kwargs):
+        serializer = FarmSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Farm created successfully",
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED)
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "details": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, pk=None):
+        farm = get_object_or_404(Farm, pk=pk)
+        serializer = FarmSerializer(farm)
+        return Response({
+            "error": False,
+            "message": "Farm retrieved successfully",
+            "data": serializer.data
+        })
+
+    def update(self, request, pk=None):
+        try:
+            farm = get_object_or_404(Farm, pk=pk)
+            serializer = FarmSerializer(farm, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Farm updated successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+            return Response({
+                "error": True,
+                "message": "Validation failed",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        try:
+            farm = get_object_or_404(Farm, pk=pk)
+            farm.delete()
+            return Response({
+                "error": False,
+                "message": "Farm deleted successfully"
             }, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({

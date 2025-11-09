@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 
-from greenApp.models import TeamRoles
+from greenApp.models import TeamRoles, Farm
 
 User = get_user_model()
 
@@ -41,4 +41,10 @@ class UserAccountSerializer(serializers.ModelSerializer):
 class TeamRolesSerializer(serializers.ModelSerializer):
     class Meta:
         model = TeamRoles
+        fields = '__all__'
+
+
+class FarmSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Farm
         fields = '__all__'

@@ -54,6 +54,7 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return f"{self.name} ({self.role})"
 
+
 # Role Model
 class TeamRoles(models.Model):
     id = models.AutoField(primary_key=True)
@@ -65,3 +66,18 @@ class TeamRoles(models.Model):
 
     def __str__(self):
         return self.role_name
+
+
+# Farm model
+class Farm(models.Model):
+    id = models.AutoField(primary_key=True)
+    user_id = models.ForeignKey(UserAccount, on_delete=models.CASCADE)
+    farm_name = models.CharField(max_length=150)
+    location = models.CharField(max_length=255)
+    farm_size = models.CharField(max_length=255, null=True, blank=True)
+    farm_number = models.CharField(max_length=255, null=True, blank=True)
+    added_on = models.DateTimeField(default=timezone.now)
+    objects = models.Manager()
+
+    def __str__(self):
+        return self.farm_name

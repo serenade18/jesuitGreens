@@ -19,11 +19,12 @@ from django.urls import path, include
 from rest_framework import routers
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from greenApp.views import UserViewSet, UserInfoView, ChangePasswordView, TeamRolesViewSet
+from greenApp.views import UserViewSet, UserInfoView, ChangePasswordView, TeamRolesViewSet, FarmViewSet
 
 router = routers.DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'roles', TeamRolesViewSet, basename='roles')
+router.register(r'farms', FarmViewSet, basename='farms')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
