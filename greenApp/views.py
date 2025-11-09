@@ -273,7 +273,7 @@ class TeamRolesViewSet(viewsets.ModelViewSet):
 class FarmViewSet(viewsets.ModelViewSet):
     permission_classes_by_action = {
         'create': [IsFarmManagerRole],
-        'list': [IsAdminRole],
+        'list': [IsAdminRole, IsFarmManagerRole],
         'destroy': [IsFarmManagerRole, IsAdminRole],
         'update': [IsFarmManagerRole, IsAdminRole],
         'retrieve': [IsFarmManagerRole, IsAdminRole],
@@ -293,7 +293,12 @@ class FarmViewSet(viewsets.ModelViewSet):
 
     def list(self, request):
         try:
-            farm = Farm.objects.all().order_by('-id')
+            user = request.user
+
+            if IsAdminRole().has_permission(request, self):
+                farm = Farm.objects.all().order_by("-id")
+            else:
+                farm = Farm.objects.filter(user_id=user).order_by("-id")
             serializer = FarmSerializer(farm, many=True)
             return Response({
                 "error": False,
@@ -310,7 +315,7 @@ class FarmViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = FarmSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(user_id=request.user)
             return Response({
                 "error": False,
                 "message": "Farm created successfully",

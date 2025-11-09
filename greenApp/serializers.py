@@ -33,6 +33,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
 
 
 class UserAccountSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=False)
     class Meta:
         model = User
         fields = '__all__'
@@ -48,3 +49,4 @@ class FarmSerializer(serializers.ModelSerializer):
     class Meta:
         model = Farm
         fields = '__all__'
+        read_only_fields = ['user_id', 'id', 'added_on']
