@@ -2,6 +2,9 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseU
 from django.db import models
 from django.utils import timezone
 
+from greenProject import settings
+
+
 # Custom User Manager
 class UserAccountManager(BaseUserManager):
     def create_user(self, email, name, role, password=None, **extra_fields):
@@ -81,3 +84,23 @@ class Farm(models.Model):
 
     def __str__(self):
         return self.farm_name
+
+
+# Notification Model
+class NotificationPreference(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notification_preferences"
+    )
+    low_stock_alerts = models.BooleanField(default=False)
+    leave_requests = models.BooleanField(default=False)
+    payment_reminders = models.BooleanField(default=False)
+    health_reminders = models.BooleanField(default=False)
+    system_updates = models.BooleanField(default=False)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.email} Preferences"
+

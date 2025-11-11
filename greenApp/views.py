@@ -5,10 +5,12 @@ from rest_framework.exceptions import ValidationError, PermissionDenied
 from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.decorators import action
 
-from greenApp.models import UserAccount, TeamRoles, Farm
+from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole
-from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer
+from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
+    NotificationPreferenceSerializer
 
 
 # Create your views here.
@@ -171,6 +173,7 @@ class UserViewSet(viewsets.ViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+# Team roles
 class TeamRolesViewSet(viewsets.ModelViewSet):
     permission_classes_by_action = {
         'create': [IsFarmManagerRole, IsAdminRole],
@@ -270,6 +273,7 @@ class TeamRolesViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
+# Farm settings vewset
 class FarmViewSet(viewsets.ModelViewSet):
     permission_classes_by_action = {
         'create': [IsFarmManagerRole],
@@ -373,3 +377,41 @@ class FarmViewSet(viewsets.ModelViewSet):
                 "message": "An error occurred",
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Notifications settings
+class NotificationPreferenceViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        try:
+            prefs, _ = NotificationPreference.objects.get_or_create(user=request.user)
+            serializer = NotificationPreferenceSerializer(prefs)
+            return Response({
+                "error": False,
+                "message": "Notification preferences retrieved successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=["patch", "put"], url_path="update")
+    def update_preferences(self, request):
+        prefs, _ = NotificationPreference.objects.get_or_create(user=request.user)
+        serializer = NotificationPreferenceSerializer(prefs, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Notifications updated",
+                "data": serializer.data
+            })
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "details": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
