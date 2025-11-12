@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 
-from greenApp.models import TeamRoles, Farm, NotificationPreference
+from greenApp.models import TeamRoles, Farm, NotificationPreference, Notification
 
 User = get_user_model()
 
@@ -56,3 +56,9 @@ class NotificationPreferenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = NotificationPreference
         fields = '__all__'
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = "__all__"

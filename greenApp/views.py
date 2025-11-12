@@ -7,10 +7,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import action
 
-from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference
+from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
-    NotificationPreferenceSerializer
+    NotificationPreferenceSerializer, NotificationSerializer
 
 
 # Create your views here.
@@ -273,7 +273,7 @@ class TeamRolesViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
-# Farm settings vewset
+# Farm settings
 class FarmViewSet(viewsets.ModelViewSet):
     permission_classes_by_action = {
         'create': [IsFarmManagerRole],
@@ -415,3 +415,75 @@ class NotificationPreferenceViewSet(viewsets.ViewSet):
             "message": "Validation failed",
             "details": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Notifications
+class NotificationsViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        notice = Notification.objects.filter(user=request.user).order_by("-added_on")
+        serializer = NotificationSerializer(notice, many=True)
+        return Response({
+            "error": False,
+            "message": "Notifications retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def retrieve(self, request, pk=None):
+        try:
+            notice = Notification.objects.get(pk=pk, user=request.user)
+            serializer = NotificationSerializer(notice)
+            return Response({
+                "error": False,
+                "message": "Notification retrieved successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Notification.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Notification not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=["post"])
+    def mark_as_read(self, request, pk=None):
+        """Mark a single notification as read."""
+        try:
+            notice = Notification.objects.get(pk=pk, user=request.user)
+            notice.read = True
+            notice.save()
+            serializer = NotificationSerializer(notice)
+            return Response({
+                "error": False,
+                "message": "Notification marked as read",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Notification.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Notification not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=["post"])
+    def mark_all_as_read(self, request):
+        """Mark all notifications for the authenticated user as read."""
+        updated_count = Notification.objects.filter(user=request.user, read=False).update(read=True)
+        return Response({
+            "error": False,
+            "message": f"{updated_count} notifications marked as read"
+        }, status=status.HTTP_200_OK)
+
+    def destroy(self, request, pk=None):
+        try:
+            notice = Notification.objects.get(pk=pk, user=request.user)
+            notice.delete()
+            return Response({
+                "error": False,
+                "message": "Notification deleted successfully"
+            }, status=status.HTTP_200_OK)
+        except Notification.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Notification not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+            

@@ -86,7 +86,7 @@ class Farm(models.Model):
         return self.farm_name
 
 
-# Notification Model
+# Notification Preference Model
 class NotificationPreference(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -100,7 +100,44 @@ class NotificationPreference(models.Model):
     system_updates = models.BooleanField(default=False)
 
     updated_at = models.DateTimeField(auto_now=True)
+    objects = models.Manager()
 
     def __str__(self):
         return f"{self.user.email} Preferences"
+
+
+# Notifications Model
+class Notification(models.Model):
+    TYPE_CHOICES = [
+        ("alert", "Alert"),
+        ("warning", "Warning"),
+        ("info", "Info"),
+        ("success", "Success"),
+    ]
+
+    CATEGORY_CHOICES = [
+        ("inventory", "Inventory"),
+        ("team", "Team"),
+        ("finance", "Finance"),
+        ("general", "General"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notifications"
+    )
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default="info")
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default="general")
+    read = models.BooleanField(default=False)
+    added_on = models.DateTimeField(default=timezone.now)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.title} - {self.user.email}"
+
+    class Meta:
+        ordering = ["-added_on"]
 
