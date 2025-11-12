@@ -6,11 +6,12 @@ from rest_framework import routers
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from greenApp.views import UserViewSet, UserInfoView, ChangePasswordView, TeamRolesViewSet, FarmViewSet, \
-    NotificationPreferenceViewSet, NotificationsViewSet
+    NotificationPreferenceViewSet, NotificationsViewSet, TeamMembersViewSet
 
 router = routers.DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'roles', TeamRolesViewSet, basename='roles')
+router.register(r'team', TeamMembersViewSet, basename='team')
 router.register(r'farms', FarmViewSet, basename='farms')
 router.register(r'notifications', NotificationsViewSet, basename='notifications')
 router.register(r'notification-prefs', NotificationPreferenceViewSet, basename='notification-prefs')

@@ -7,10 +7,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import action
 
-from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification
+from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
-    NotificationPreferenceSerializer, NotificationSerializer
+    NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer
 
 
 # Create your views here.
@@ -491,3 +491,150 @@ class NotificationsViewSet(viewsets.ViewSet):
                 "error": True,
                 "message": "Notification not found"
             }, status=status.HTTP_404_NOT_FOUND)
+
+
+# Team Members
+class TeamMembersViewSet(viewsets.ViewSet):
+    permission_classes_by_action = {
+        'create': [IsFarmManagerRole],
+        'list': [IsAdminRole, IsFarmManagerRole],
+        'destroy': [IsFarmManagerRole, IsAdminRole],
+        'update': [IsFarmManagerRole, IsAdminRole],
+        'retrieve': [IsFarmManagerRole, IsAdminRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(self.action, self.permission_classes_by_action['default'])
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def list(self, request):
+        try:
+            user = request.user
+            if IsAdminRole().has_permission(request, self):
+                team = TeamMember.objects.all().order_by("-id")
+            else:
+                team = TeamMember.objects.filter(user=user).order_by("-id")
+            serializer = TeamSerializer(team, many=True)
+            return Response({
+                "error": False,
+                "message": "All Team Members",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request):
+        try:
+            data = request.data.copy()
+            data['user'] = request.user.id  # link to the farm admin creating the member
+
+            if 'password' in data and data['password']:
+                data['password'] = make_password(data['password'])  # hash password
+
+            serializer = TeamSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Team Member Created Successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+            else:
+                return Response({
+                    "error": True,
+                    "message": "Validation Failed",
+                    "details": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, pk=None):
+        try:
+            member = TeamMember.objects.get(pk=pk)
+            serializer = TeamSerializer(member)
+            return Response({
+                "error": False,
+                "message": "Team Member Details",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except TeamMember.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Team Member Not Found"
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        try:
+            member = TeamMember.objects.get(pk=pk)
+            data = request.data.copy()
+            if 'password' in data and data['password']:
+                data['password'] = make_password(data['password'])
+            serializer = TeamSerializer(member, data=data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Team Member Updated Successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    "error": True,
+                    "message": "Validation Failed",
+                    "details": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+        except TeamMember.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Team Member Not Found"
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        try:
+            member = TeamMember.objects.get(pk=pk)
+            member.delete()
+            return Response({
+                "error": False,
+                "message": "Team Member Deleted Successfully"
+            }, status=status.HTTP_200_OK)
+        except TeamMember.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Team Member Not Found"
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+

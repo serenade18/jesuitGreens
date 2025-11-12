@@ -141,3 +141,19 @@ class Notification(models.Model):
     class Meta:
         ordering = ["-added_on"]
 
+
+# Team Members Model
+class TeamMember(models.Model):
+    id = models.AutoField(primary_key=True)
+    email = models.EmailField(unique=True)
+    name = models.CharField(max_length=150)
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    role = models.ForeignKey(TeamRoles,  on_delete=models.CASCADE, related_name="role")
+    user = models.ForeignKey(UserAccount, on_delete=models.CASCADE, related_name="team_members")
+    password = models.CharField(max_length=255)  # store hashed password
+    is_active = models.BooleanField(default=True)
+    added_on = models.DateTimeField(default=timezone.now)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.name} ({self.role})"
