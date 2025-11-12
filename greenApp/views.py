@@ -422,8 +422,15 @@ class NotificationsViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
 
     def list(self, request):
-        notice = Notification.objects.filter(user=request.user).order_by("-added_on")
+        filter_param = request.query_params.get("filter", "all")
+        
+        notice = Notification.objects.filter(user=request.user)
+        if filter_param == "unread":
+            notice = notice.filter(read=False)
+
+        notice = notice.order_by("-added_on")
         serializer = NotificationSerializer(notice, many=True)
+
         return Response({
             "error": False,
             "message": "Notifications retrieved successfully",
@@ -447,7 +454,6 @@ class NotificationsViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=["post"])
     def mark_as_read(self, request, pk=None):
-        """Mark a single notification as read."""
         try:
             notice = Notification.objects.get(pk=pk, user=request.user)
             notice.read = True
@@ -466,7 +472,6 @@ class NotificationsViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=["post"])
     def mark_all_as_read(self, request):
-        """Mark all notifications for the authenticated user as read."""
         updated_count = Notification.objects.filter(user=request.user, read=False).update(read=True)
         return Response({
             "error": False,
@@ -486,4 +491,3 @@ class NotificationsViewSet(viewsets.ViewSet):
                 "error": True,
                 "message": "Notification not found"
             }, status=status.HTTP_404_NOT_FOUND)
-            
