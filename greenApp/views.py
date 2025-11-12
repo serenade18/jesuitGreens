@@ -1,4 +1,4 @@
-from django.contrib.auth.hashers import make_password
+from django.contrib.auth.hashers import make_password, check_password
 from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets, status
 from rest_framework.exceptions import ValidationError, PermissionDenied
@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import action
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole
@@ -14,6 +15,71 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
 
 
 # Create your views here.
+
+class LoginViewSet(viewsets.ViewSet):
+    permission_classes = [AllowAny]
+
+    def create(self, request):
+        """
+        Unified login for UserAccount and TeamMember.
+        Payload: { "email": "...", "password": "..." }
+        """
+        email = request.data.get("email")
+        password = request.data.get("password")
+
+        if not email or not password:
+            return Response({
+                "error": True,
+                "message": "Email and password are required"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # First try to authenticate UserAccount
+        try:
+            user = UserAccount.objects.get(email=email)
+            if user.check_password(password):
+                token = RefreshToken.for_user(user)
+                return Response({
+                    "error": False,
+                    "message": "Login successful",
+                    "data": {
+                        "user_type": "useraccount",
+                        "id": user.id,
+                        "name": user.name,
+                        "email": user.email,
+                        "role": user.role,
+                        "access": str(token.access_token),
+                        "refresh": str(token),
+                    }
+                }, status=status.HTTP_200_OK)
+        except UserAccount.DoesNotExist:
+            user = None
+
+        # Then try TeamMember
+        try:
+            team_member = TeamMember.objects.get(email=email, is_active=True)
+            if check_password(password, team_member.password):
+                token = RefreshToken.for_user(team_member)  # works if you allow non-Django users
+                return Response({
+                    "error": False,
+                    "message": "Login successful",
+                    "data": {
+                        "user_type": "team_member",
+                        "id": team_member.id,
+                        "name": team_member.name,
+                        "email": team_member.email,
+                        "role": team_member.role.role_name,
+                        "access": str(token.access_token),
+                        "refresh": str(token),
+                    }
+                }, status=status.HTTP_200_OK)
+        except TeamMember.DoesNotExist:
+            team_member = None
+
+        return Response({
+            "error": True,
+            "message": "Invalid email or password"
+        }, status=status.HTTP_401_UNAUTHORIZED)
+
 
 class UserInfoView(APIView):
     permission_classes = [IsAuthenticated]

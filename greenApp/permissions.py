@@ -19,3 +19,7 @@ class IsFarmManagerRole(BasePermission):
             and request.user.is_authenticated
             and getattr(request.user, "role", None) == "farm_admin"
         )
+
+class IsUserOrTeamMember(BasePermission):
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated) or hasattr(request, 'team_member')
