@@ -4,11 +4,13 @@ from datetime import datetime, timedelta
 from django.contrib.auth.hashers import make_password, check_password
 from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets, status
-from rest_framework.exceptions import ValidationError, PermissionDenied
+from rest_framework.exceptions import ValidationError, PermissionDenied, AuthenticationFailed
 from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import action
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from greenProject import settings
@@ -24,10 +26,6 @@ class LoginViewSet(viewsets.ViewSet):
     permission_classes = [AllowAny]
 
     def create(self, request):
-        """
-        Unified login for UserAccount and TeamMember.
-        Payload: { "email": "...", "password": "..." }
-        """
         email = request.data.get("email")
         password = request.data.get("password")
 
@@ -37,54 +35,44 @@ class LoginViewSet(viewsets.ViewSet):
                 "message": "Email and password are required"
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # First try to authenticate UserAccount
         try:
             user = UserAccount.objects.get(email=email)
             if user.check_password(password):
                 token = RefreshToken.for_user(user)
                 return Response({
-                    "error": False,
-                    "message": "Login successful",
-                    "data": {
-                        "user_type": "useraccount",
-                        "id": user.id,
-                        "name": user.name,
-                        "email": user.email,
-                        "role": user.role,
-                        "access": str(token.access_token),
-                        "refresh": str(token),
-                    }
+                    "access": str(token.access_token),
+                    "refresh": str(token),
                 }, status=status.HTTP_200_OK)
         except UserAccount.DoesNotExist:
             user = None
 
-        # Then try TeamMember
         try:
             team_member = TeamMember.objects.get(email=email, is_active=True)
             if check_password(password, team_member.password):
-                payload = {
+                access_payload = {
                     "id": team_member.id,
                     "email": team_member.email,
                     "user_type": "team_member",
-                    "exp": datetime.utcnow() + timedelta(days=3),
-                    "iat": datetime.utcnow()
+                    "exp": datetime.utcnow() + timedelta(hours=1),
+                    "iat": datetime.utcnow(),
                 }
-                token = jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
+                refresh_payload = {
+                    "id": team_member.id,
+                    "email": team_member.email,
+                    "type": "refresh",
+                    "exp": datetime.utcnow() + timedelta(days=7),
+                    "iat": datetime.utcnow(),
+                }
+
+                access_token = jwt.encode(access_payload, settings.SECRET_KEY, algorithm="HS256")
+                refresh_token = jwt.encode(refresh_payload, settings.SECRET_KEY, algorithm="HS256")
 
                 return Response({
-                    "error": False,
-                    "message": "Login successful",
-                    "data": {
-                        "user_type": "team_member",
-                        "id": team_member.id,
-                        "name": team_member.name,
-                        "email": team_member.email,
-                        "role": team_member.role.role_name,
-                        "access": token,
-                    }
+                    "access": access_token,
+                    "refresh": refresh_token,
                 }, status=status.HTTP_200_OK)
         except TeamMember.DoesNotExist:
-            team_member = None
+            pass
 
         return Response({
             "error": True,
@@ -92,20 +80,92 @@ class LoginViewSet(viewsets.ViewSet):
         }, status=status.HTTP_401_UNAUTHORIZED)
 
 
+class UnifiedRefreshView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        refresh_token = request.data.get("refresh")
+        if not refresh_token:
+            return Response({"error": True, "message": "Refresh token is required"}, status=400)
+
+        try:
+            token = RefreshToken(refresh_token)
+            return Response({
+                "access": str(token.access_token)
+            }, status=status.HTTP_200_OK)
+        except Exception:
+            pass
+
+        try:
+            decoded = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=["HS256"])
+            if decoded.get("type") == "refresh":
+                new_access_payload = {
+                    "id": decoded["id"],
+                    "email": decoded["email"],
+                    "user_type": "team_member",
+                    "exp": datetime.utcnow() + timedelta(hours=1),
+                    "iat": datetime.utcnow()
+                }
+                new_access_token = jwt.encode(new_access_payload, settings.SECRET_KEY, algorithm="HS256")
+                return Response({
+                    "access": new_access_token
+                }, status=status.HTTP_200_OK)
+        except jwt.ExpiredSignatureError:
+            return Response({"error": True, "message": "Refresh token expired"}, status=401)
+        except jwt.InvalidTokenError:
+            return Response({"error": True, "message": "Invalid refresh token"}, status=401)
+
+        return Response({"error": True, "message": "Invalid or unsupported refresh token"}, status=400)
+
+
+def get_authenticated_user(request):
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        raise AuthenticationFailed("Missing or invalid authorization header")
+
+    token = auth_header.split(' ')[1]
+
+    # First, try decoding as manual TeamMember token
+    try:
+        decoded = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+        if decoded.get("user_type") == "team_member":
+            team_member = TeamMember.objects.get(id=decoded["id"], is_active=True)
+            return team_member, "team_member"
+    except jwt.ExpiredSignatureError:
+        raise AuthenticationFailed("Token expired")
+    except jwt.InvalidTokenError:
+        pass  # Not a manual token, try SimpleJWT next
+
+    # Now try SimpleJWT for UserAccount
+    from rest_framework_simplejwt.authentication import JWTAuthentication
+    jwt_auth = JWTAuthentication()
+    try:
+        validated_token = jwt_auth.get_validated_token(token)
+        user = jwt_auth.get_user(validated_token)
+        return user, "user_account"
+    except Exception:
+        raise AuthenticationFailed("Invalid or unsupported token")
+
+
 class UserInfoView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]  # we’ll handle auth manually
 
     def get(self, request):
-        user = request.user
-        serializer = UserAccountSerializer(user)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        user, user_type = get_authenticated_user(request)
+        if user_type == "user_account":
+            serializer = UserAccountSerializer(user)
+        else:
+            serializer = TeamSerializer(user)
+        return Response({
+            "user_type": user_type,
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
 
     def put(self, request):
-        """Full update of logged-in user's profile"""
-        user = request.user
-        serializer = UserAccountSerializer(user, data=request.data)
+        user, user_type = get_authenticated_user(request)
+        serializer_class = UserAccountSerializer if user_type == "user_account" else TeamSerializer
+        serializer = serializer_class(user, data=request.data)
         if serializer.is_valid():
-            # Handle password hashing if updated
             if "password" in serializer.validated_data:
                 serializer.validated_data["password"] = make_password(serializer.validated_data["password"])
             serializer.save()
@@ -113,9 +173,9 @@ class UserInfoView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request):
-        """Partial update of logged-in user's profile"""
-        user = request.user
-        serializer = UserAccountSerializer(user, data=request.data, partial=True)
+        user, user_type = get_authenticated_user(request)
+        serializer_class = UserAccountSerializer if user_type == "user_account" else TeamSerializer
+        serializer = serializer_class(user, data=request.data, partial=True)
         if serializer.is_valid():
             if "password" in serializer.validated_data:
                 serializer.validated_data["password"] = make_password(serializer.validated_data["password"])
@@ -124,10 +184,46 @@ class UserInfoView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request):
-        """Allow logged-in user to delete their own account"""
-        user = request.user
+        user, _ = get_authenticated_user(request)
         user.delete()
         return Response({"message": "Account deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+
+# class UserInfoView(APIView):
+#     permission_classes = [IsAuthenticated]
+#
+#     def get(self, request):
+#         user = request.user
+#         serializer = UserAccountSerializer(user)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+#
+#     def put(self, request):
+#         """Full update of logged-in user's profile"""
+#         user = request.user
+#         serializer = UserAccountSerializer(user, data=request.data)
+#         if serializer.is_valid():
+#             # Handle password hashing if updated
+#             if "password" in serializer.validated_data:
+#                 serializer.validated_data["password"] = make_password(serializer.validated_data["password"])
+#             serializer.save()
+#             return Response(serializer.data, status=status.HTTP_200_OK)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+#
+#     def patch(self, request):
+#         """Partial update of logged-in user's profile"""
+#         user = request.user
+#         serializer = UserAccountSerializer(user, data=request.data, partial=True)
+#         if serializer.is_valid():
+#             if "password" in serializer.validated_data:
+#                 serializer.validated_data["password"] = make_password(serializer.validated_data["password"])
+#             serializer.save()
+#             return Response(serializer.data, status=status.HTTP_200_OK)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+#
+#     def delete(self, request):
+#         """Allow logged-in user to delete their own account"""
+#         user = request.user
+#         user.delete()
+#         return Response({"message": "Account deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
 
 
 class ChangePasswordView(APIView):

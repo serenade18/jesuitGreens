@@ -6,7 +6,7 @@ from rest_framework import routers
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from greenApp.views import UserViewSet, UserInfoView, ChangePasswordView, TeamRolesViewSet, FarmViewSet, \
-    NotificationPreferenceViewSet, NotificationsViewSet, TeamMembersViewSet, LoginViewSet
+    NotificationPreferenceViewSet, NotificationsViewSet, TeamMembersViewSet, LoginViewSet, UnifiedRefreshView
 
 router = routers.DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -19,9 +19,10 @@ router.register(r'notification-prefs', NotificationPreferenceViewSet, basename='
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
-    path('api/login/', LoginViewSet.as_view({'post': 'create'}), name="login"),
-    path('api/gettoken/', TokenObtainPairView.as_view(), name="gettoken"),
-    path('api/refresh_token/', TokenRefreshView.as_view(), name="refresh_token"),
+    path('api/gettoken/', LoginViewSet.as_view({'post': 'create'}), name="gettoken"),
+    path('api/refresh_token/', UnifiedRefreshView.as_view(), name="refresh_token"),
+    # path('api/gettoken/', TokenObtainPairView.as_view(), name="gettoken"),
+    # path('api/refresh_token/', TokenRefreshView.as_view(), name="refresh_token"),
     path('api/userinfo/', UserInfoView.as_view(), name='userinfo'),
     path('api/userinfo/change-password/', ChangePasswordView.as_view(), name="change-password"),
 ]
