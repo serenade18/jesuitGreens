@@ -12,6 +12,7 @@ from rest_framework.decorators import action
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
+from jwt import ExpiredSignatureError, InvalidTokenError
 
 from greenProject import settings
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember
@@ -21,6 +22,38 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
 
 
 # Create your views here.
+
+def encode_token(payload: dict, lifetime: timedelta, algorithm="HS256") -> str:
+    """
+    Encode a JWT manually, like TokenBackend.
+    """
+    now = datetime.utcnow()
+    token_payload = payload.copy()
+
+    # Add issued at and expiration
+    token_payload["iat"] = int(now.timestamp())
+    token_payload["exp"] = int((now + lifetime).timestamp())
+
+    # Encode with secret key
+    token = jwt.encode(token_payload, settings.SECRET_KEY, algorithm=algorithm)
+    if isinstance(token, bytes):
+        return token.decode("utf-8")
+    return token
+
+
+def decode_token(token: str, verify_exp=True, algorithm="HS256") -> dict:
+    try:
+        return jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[algorithm],
+            options={"verify_exp": verify_exp}
+        )
+    except ExpiredSignatureError:
+        raise Exception("Token expired")
+    except InvalidTokenError:
+        raise Exception("Invalid token")
+
 
 class LoginViewSet(viewsets.ViewSet):
     permission_classes = [AllowAny]
@@ -53,19 +86,16 @@ class LoginViewSet(viewsets.ViewSet):
                     "id": team_member.id,
                     "email": team_member.email,
                     "user_type": "team_member",
-                    "exp": datetime.utcnow() + timedelta(hours=1),
-                    "iat": datetime.utcnow(),
                 }
                 refresh_payload = {
                     "id": team_member.id,
                     "email": team_member.email,
+                    "user_type": "team_member",
                     "type": "refresh",
-                    "exp": datetime.utcnow() + timedelta(days=7),
-                    "iat": datetime.utcnow(),
                 }
 
-                access_token = jwt.encode(access_payload, settings.SECRET_KEY, algorithm="HS256")
-                refresh_token = jwt.encode(refresh_payload, settings.SECRET_KEY, algorithm="HS256")
+                access_token = encode_token(access_payload, timedelta(hours=1))
+                refresh_token = encode_token(refresh_payload, timedelta(days=7))
 
                 return Response({
                     "access": access_token,
@@ -88,6 +118,8 @@ class UnifiedRefreshView(APIView):
         if not refresh_token:
             return Response({"error": True, "message": "Refresh token is required"}, status=400)
 
+        # Try UserAccount token (SimpleJWT)
+        from rest_framework_simplejwt.tokens import RefreshToken
         try:
             token = RefreshToken(refresh_token)
             return Response({
@@ -96,24 +128,21 @@ class UnifiedRefreshView(APIView):
         except Exception:
             pass
 
+        # Try TeamMember token (manual)
         try:
-            decoded = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=["HS256"])
-            if decoded.get("type") == "refresh":
-                new_access_payload = {
-                    "id": decoded["id"],
-                    "email": decoded["email"],
-                    "user_type": "team_member",
-                    "exp": datetime.utcnow() + timedelta(hours=1),
-                    "iat": datetime.utcnow()
-                }
-                new_access_token = jwt.encode(new_access_payload, settings.SECRET_KEY, algorithm="HS256")
+            decoded = decode_token(refresh_token)
+            if decoded.get("user_type") == "team_member" and decoded.get("type") == "refresh":
+                new_access_token = encode_token(
+                    {"id": decoded["id"], "email": decoded["email"], "user_type": "team_member"},
+                    timedelta(hours=1)
+                )
+
                 return Response({
                     "access": new_access_token
                 }, status=status.HTTP_200_OK)
-        except jwt.ExpiredSignatureError:
-            return Response({"error": True, "message": "Refresh token expired"}, status=401)
-        except jwt.InvalidTokenError:
-            return Response({"error": True, "message": "Invalid refresh token"}, status=401)
+
+        except Exception as e:
+            return Response({"error": True, "message": str(e)}, status=401)
 
         return Response({"error": True, "message": "Invalid or unsupported refresh token"}, status=400)
 
