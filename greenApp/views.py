@@ -1,3 +1,6 @@
+import jwt
+from datetime import datetime, timedelta
+
 from django.contrib.auth.hashers import make_password, check_password
 from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets, status
@@ -8,6 +11,7 @@ from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from greenProject import settings
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
@@ -58,7 +62,15 @@ class LoginViewSet(viewsets.ViewSet):
         try:
             team_member = TeamMember.objects.get(email=email, is_active=True)
             if check_password(password, team_member.password):
-                token = RefreshToken.for_user(team_member)  # works if you allow non-Django users
+                payload = {
+                    "id": team_member.id,
+                    "email": team_member.email,
+                    "user_type": "team_member",
+                    "exp": datetime.utcnow() + timedelta(days=3),
+                    "iat": datetime.utcnow()
+                }
+                token = jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
+
                 return Response({
                     "error": False,
                     "message": "Login successful",
@@ -68,8 +80,7 @@ class LoginViewSet(viewsets.ViewSet):
                         "name": team_member.name,
                         "email": team_member.email,
                         "role": team_member.role.role_name,
-                        "access": str(token.access_token),
-                        "refresh": str(token),
+                        "access": token,
                     }
                 }, status=status.HTTP_200_OK)
         except TeamMember.DoesNotExist:
