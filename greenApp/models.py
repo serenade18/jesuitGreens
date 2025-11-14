@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.db import models
 from django.utils import timezone
@@ -166,7 +168,7 @@ class TeamMember(models.Model):
         return f"{self.name} ({self.role})"
 
 
-# Leave Request Modal
+# Leave Request Model
 class LeaveRequest(models.Model):
     class Status(models.TextChoices):
         APPROVED = "Approved", "Approved"
@@ -185,3 +187,58 @@ class LeaveRequest(models.Model):
 
     def __str__(self):
         return f"{self.team_member.name} - {self.leave_type} ({self.status})"
+
+
+# Salary Model
+class Salary(models.Model):
+    STATUS_PENDING = "PENDING"
+    STATUS_PAID = "PAID"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_PAID, "Paid"),
+    ]
+
+    # Link to your TeamMember model as the employee
+    employee = models.ForeignKey(
+        TeamMember,
+        on_delete=models.CASCADE,
+        related_name="salaries"
+    )
+    role = models.CharField(max_length=150, blank=True)  # optional, can duplicate team_member.role
+    monthly_salary = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    last_paid = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    objects = models.Manager()
+
+    class Meta:
+        ordering = ["-employee__id", "role"]
+
+    def __str__(self):
+        return f"{self.employee.name} — {self.role or 'Employee'}"
+
+
+# Salary Payment Model
+class SalaryPayment(models.Model):
+    PAYMENT_METHOD_CHOICES = [
+        ("MPESA", "M-Pesa"),
+        ("BANK", "Bank Transfer"),
+        ("CASH", "Cash"),
+        ("OTHER", "Other"),
+    ]
+
+    salary = models.ForeignKey(Salary, on_delete=models.CASCADE, related_name="payments")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    date = models.DateTimeField(default=timezone.now)
+    method = models.CharField(max_length=16, choices=PAYMENT_METHOD_CHOICES, default="MPESA")
+    reference = models.CharField(max_length=255, blank=True, help_text="Payment system reference / transaction id")
+    success = models.BooleanField(default=False)
+    metadata = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-date"]
+
+    def __str__(self):
+        return f"{self.salary.employee.name} — {self.amount} on {self.date.date()}"

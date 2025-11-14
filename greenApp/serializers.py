@@ -2,7 +2,8 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from rest_framework.exceptions import ValidationError
 
-from greenApp.models import TeamRoles, Farm, NotificationPreference, Notification, TeamMember, LeaveRequest
+from greenApp.models import TeamRoles, Farm, NotificationPreference, Notification, TeamMember, LeaveRequest, Salary, \
+    SalaryPayment
 
 User = get_user_model()
 
@@ -76,8 +77,51 @@ class TeamSerializer(serializers.ModelSerializer):
 
 
 class LeaveRequestSerializer(serializers.ModelSerializer):
+    employee = serializers.CharField(source="team_member.name",read_only=True)
+
     class Meta:
         model = LeaveRequest
         fields = "__all__"
         read_only_fields = ["team_member", "status", "added_on", "days"]
 
+
+class SalaryPaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalaryPayment
+        fields = '__all__'
+
+
+class SalarySerializer(serializers.ModelSerializer):
+    employee_name = serializers.SerializerMethodField()
+    employee_role = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Salary
+        fields = [
+            "id",
+            "employee",
+            "role",
+            "monthly_salary",
+            "last_paid",
+            "status",
+            "notes",
+            "created_at",
+            "updated_at",
+            "employee_name",
+            "employee_role",
+        ]
+
+    def get_employee_name(self, obj):
+        # Return the TeamMember's name
+        return obj.employee.name
+
+    def get_employee_role(self, obj):
+        # Return the TeamMember's role name
+        return obj.employee.role.role_name if obj.employee.role else None
+
+
+class SalaryDetailSerializer(SalarySerializer):
+    payments = SalaryPaymentSerializer(source="payments", many=True, read_only=True)
+
+    class Meta(SalarySerializer.Meta):
+        fields = SalarySerializer.Meta.fields + ["payments"]

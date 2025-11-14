@@ -15,10 +15,12 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from jwt import ExpiredSignatureError, InvalidTokenError
 
 from greenProject import settings
-from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, LeaveRequest
+from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, \
+    LeaveRequest, Salary
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
-    NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer
+    NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
+    SalaryDetailSerializer
 
 
 # Create your views here.
@@ -562,7 +564,7 @@ class NotificationsViewSet(viewsets.ViewSet):
     def list(self, request):
         filter_param = request.query_params.get("filter", "all")
         
-        notice = Notification.objects.filter(user=request.user)
+        notice = Notification.objects.all()
         if filter_param == "unread":
             notice = notice.filter(read=False)
 
@@ -905,11 +907,11 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 status="Pending",
             )
 
-            # ✅ CREATE NOTIFICATION
+            # CREATE NOTIFICATION
             Notification.objects.create(
                 user=user,
                 title="Leave Request Submitted",
-                message=f"Your leave request for {start_date} to {end_date} ({days} days) has been submitted successfully.",
+                message=f"Leave request for {start_date} to {end_date} ({days} days) has been submitted successfully.",
                 type="success",
                 category="team"
             )
@@ -1030,5 +1032,153 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             return Response({
                 "error": True,
                 "message": "Could not reject leave",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Salaries
+class SalaryViewSet(viewsets.ViewSet):
+    permission_classes_by_action = {
+        'create': [IsFarmManagerRole],
+        'list': [IsAdminRole, IsFarmManagerRole],
+        'retrieve': [IsFarmManagerRole, IsAdminRole],
+        'update': [IsFarmManagerRole, IsAdminRole],
+        'partial_update': [IsFarmManagerRole, IsAdminRole],
+        'destroy': [IsFarmManagerRole, IsAdminRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(self.action, self.permission_classes_by_action['default'])
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def list(self, request):
+        try:
+            user = request.user
+            if IsAdminRole().has_permission(request, self):
+                salaries = Salary.objects.all().order_by("-id")
+            else:
+                salaries = Salary.objects.filter(employee__user=user).order_by("-id")
+
+            serializer = SalarySerializer(salaries, many=True)
+            return Response({
+                "error": False,
+                "message": "All Salaries",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, pk=None):
+        try:
+            salary = get_object_or_404(Salary, pk=pk)
+            serializer = SalaryDetailSerializer(salary)
+            return Response({
+                "error": False,
+                "message": "Salary Details",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request):
+        try:
+            member_id = request.data.get("employee")
+            if not member_id:
+                return Response({
+                    "error": True,
+                    "message": "Team member is required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get the member
+            member = get_object_or_404(TeamMember, id=member_id)
+
+            # Get the role name from Role model
+            if not member.role:
+                return Response({
+                    "error": True,
+                    "message": "Selected team member has no role assigned"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            role_name = member.role.role_name  # <-- Fetch role_name via role ID
+
+            # Inject into request data
+            data = request.data.copy()
+            data["role"] = role_name  # <-- Save role name in salary
+
+            serializer = SalarySerializer(data=data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Salary Created Successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response({
+                "error": True,
+                "message": "Validation Failed",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        try:
+            salary = get_object_or_404(Salary, pk=pk)
+            serializer = SalarySerializer(salary, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Salary Updated Successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+            return Response({
+                "error": True,
+                "message": "Validation Failed",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        try:
+            salary = get_object_or_404(Salary, pk=pk)
+            salary.delete()
+            return Response({
+                "error": False,
+                "message": "Salary Deleted Successfully"
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
