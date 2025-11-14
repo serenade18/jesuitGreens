@@ -15,59 +15,84 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from jwt import ExpiredSignatureError, InvalidTokenError
 
 from greenProject import settings
-from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember
-from greenApp.permissions import IsAdminRole, IsFarmManagerRole
+from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, LeaveRequest
+from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
-    NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer
+    NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer
 
 
 # Create your views here.
 
-def encode_token(payload: dict, lifetime: timedelta, algorithm="HS256") -> str:
-    """
-    Encode a JWT manually, like TokenBackend.
-    """
+def encode_manual_token(payload: dict, lifetime: timedelta, algorithm="HS256") -> str:
     now = datetime.utcnow()
     token_payload = payload.copy()
-
-    # Add issued at and expiration
     token_payload["iat"] = int(now.timestamp())
     token_payload["exp"] = int((now + lifetime).timestamp())
-
-    # Encode with secret key
     token = jwt.encode(token_payload, settings.SECRET_KEY, algorithm=algorithm)
-    if isinstance(token, bytes):
-        return token.decode("utf-8")
-    return token
+    return token if isinstance(token, str) else token.decode("utf-8")
 
 
-def decode_token(token: str, verify_exp=True, algorithm="HS256") -> dict:
+def decode_manual_token(token: str, verify_exp=True) -> dict:
+    """Decode a manual TeamMember JWT"""
     try:
-        return jwt.decode(
-            token,
-            settings.SECRET_KEY,
-            algorithms=[algorithm],
-            options={"verify_exp": verify_exp}
-        )
-    except ExpiredSignatureError:
-        raise Exception("Token expired")
-    except InvalidTokenError:
-        raise Exception("Invalid token")
+        return jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"], options={"verify_exp": verify_exp})
+    except jwt.ExpiredSignatureError:
+        raise AuthenticationFailed("Manual token expired")
+    except jwt.InvalidTokenError:
+        raise AuthenticationFailed("Invalid manual token")
+
+def decode_team_member_token(token: str):
+    try:
+        decoded = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+        if decoded.get("user_type") != "team_member":
+            raise AuthenticationFailed("Token is not for a team member")
+        team_member = TeamMember.objects.get(id=decoded["id"], is_active=True)
+        return team_member, "team_member"
+    except jwt.ExpiredSignatureError:
+        raise AuthenticationFailed("Team member token expired")
+    except jwt.InvalidTokenError:
+        raise AuthenticationFailed("Invalid team member token")
+    except TeamMember.DoesNotExist:
+        raise AuthenticationFailed("Team member not found")
+
+# Decode UserAccount via SimpleJWT
+def decode_user_account_token(token: str):
+    jwt_auth = JWTAuthentication()
+    try:
+        validated_token = jwt_auth.get_validated_token(token)
+        user = jwt_auth.get_user(validated_token)
+        return user, "user_account"
+    except Exception:
+        raise AuthenticationFailed("Invalid UserAccount token")
+
+# Unified get_authenticated_user
+def get_authenticated_user(request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise AuthenticationFailed("Missing or invalid authorization header")
+
+    token = auth_header.split(" ")[1]
+
+    # Try TeamMember first
+    try:
+        return decode_team_member_token(token)
+    except AuthenticationFailed:
+        # Not a TeamMember token, fallback to UserAccount
+        return decode_user_account_token(token)
 
 
+# --- Login ---
 class LoginViewSet(viewsets.ViewSet):
     permission_classes = [AllowAny]
 
     def create(self, request):
         email = request.data.get("email")
         password = request.data.get("password")
-
         if not email or not password:
-            return Response({
-                "error": True,
-                "message": "Email and password are required"
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": True, "message": "Email and password are required"},
+                            status=status.HTTP_400_BAD_REQUEST)
 
+        # 1️⃣ UserAccount login
         try:
             user = UserAccount.objects.get(email=email)
             if user.check_password(password):
@@ -77,39 +102,26 @@ class LoginViewSet(viewsets.ViewSet):
                     "refresh": str(token),
                 }, status=status.HTTP_200_OK)
         except UserAccount.DoesNotExist:
-            user = None
+            pass
 
+        # 2️⃣ TeamMember login
         try:
             team_member = TeamMember.objects.get(email=email, is_active=True)
             if check_password(password, team_member.password):
-                access_payload = {
-                    "id": team_member.id,
-                    "email": team_member.email,
-                    "user_type": "team_member",
-                }
-                refresh_payload = {
-                    "id": team_member.id,
-                    "email": team_member.email,
-                    "user_type": "team_member",
-                    "type": "refresh",
-                }
+                access_payload = {"id": team_member.id, "email": team_member.email, "user_type": "team_member"}
+                refresh_payload = {"id": team_member.id, "email": team_member.email,
+                                   "user_type": "team_member", "type": "refresh"}
 
-                access_token = encode_token(access_payload, timedelta(hours=1))
-                refresh_token = encode_token(refresh_payload, timedelta(days=7))
-
-                return Response({
-                    "access": access_token,
-                    "refresh": refresh_token,
-                }, status=status.HTTP_200_OK)
+                access_token = encode_manual_token(access_payload, timedelta(hours=1))
+                refresh_token = encode_manual_token(refresh_payload, timedelta(days=7))
+                return Response({"access": access_token, "refresh": refresh_token}, status=status.HTTP_200_OK)
         except TeamMember.DoesNotExist:
             pass
 
-        return Response({
-            "error": True,
-            "message": "Invalid email or password"
-        }, status=status.HTTP_401_UNAUTHORIZED)
+        return Response({"error": True, "message": "Invalid email or password"}, status=status.HTTP_401_UNAUTHORIZED)
 
 
+# --- Refresh ---
 class UnifiedRefreshView(APIView):
     permission_classes = [AllowAny]
 
@@ -118,83 +130,43 @@ class UnifiedRefreshView(APIView):
         if not refresh_token:
             return Response({"error": True, "message": "Refresh token is required"}, status=400)
 
-        # Try UserAccount token (SimpleJWT)
-        from rest_framework_simplejwt.tokens import RefreshToken
+        # SimpleJWT refresh
         try:
             token = RefreshToken(refresh_token)
-            return Response({
-                "access": str(token.access_token)
-            }, status=status.HTTP_200_OK)
+            return Response({"access": str(token.access_token)}, status=status.HTTP_200_OK)
         except Exception:
             pass
 
-        # Try TeamMember token (manual)
+        # Manual TeamMember refresh
         try:
-            decoded = decode_token(refresh_token)
+            decoded = decode_manual_token(refresh_token)
             if decoded.get("user_type") == "team_member" and decoded.get("type") == "refresh":
-                new_access_token = encode_token(
+                new_access_token = encode_manual_token(
                     {"id": decoded["id"], "email": decoded["email"], "user_type": "team_member"},
                     timedelta(hours=1)
                 )
-
-                return Response({
-                    "access": new_access_token
-                }, status=status.HTTP_200_OK)
-
+                return Response({"access": new_access_token}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": True, "message": str(e)}, status=401)
 
         return Response({"error": True, "message": "Invalid or unsupported refresh token"}, status=400)
 
 
-def get_authenticated_user(request):
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        raise AuthenticationFailed("Missing or invalid authorization header")
-
-    token = auth_header.split(' ')[1]
-
-    # First, try decoding as manual TeamMember token
-    try:
-        decoded = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-        if decoded.get("user_type") == "team_member":
-            team_member = TeamMember.objects.get(id=decoded["id"], is_active=True)
-            return team_member, "team_member"
-    except jwt.ExpiredSignatureError:
-        raise AuthenticationFailed("Token expired")
-    except jwt.InvalidTokenError:
-        pass  # Not a manual token, try SimpleJWT next
-
-    # Now try SimpleJWT for UserAccount
-    from rest_framework_simplejwt.authentication import JWTAuthentication
-    jwt_auth = JWTAuthentication()
-    try:
-        validated_token = jwt_auth.get_validated_token(token)
-        user = jwt_auth.get_user(validated_token)
-        return user, "user_account"
-    except Exception:
-        raise AuthenticationFailed("Invalid or unsupported token")
-
-
+# --- User Info ---
 class UserInfoView(APIView):
-    permission_classes = [AllowAny]  # we’ll handle auth manually
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user, user_type = get_authenticated_user(request)
-        if user_type == "user_account":
-            serializer = UserAccountSerializer(user)
-        else:
-            serializer = TeamSerializer(user)
-        return Response({
-            "user_type": user_type,
-            "data": serializer.data
-        }, status=status.HTTP_200_OK)
+        user = request.user
+        serializer = UserAccountSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request):
-        user, user_type = get_authenticated_user(request)
-        serializer_class = UserAccountSerializer if user_type == "user_account" else TeamSerializer
-        serializer = serializer_class(user, data=request.data)
+        """Full update of logged-in user's profile"""
+        user = request.user
+        serializer = UserAccountSerializer(user, data=request.data)
         if serializer.is_valid():
+            # Handle password hashing if updated
             if "password" in serializer.validated_data:
                 serializer.validated_data["password"] = make_password(serializer.validated_data["password"])
             serializer.save()
@@ -202,9 +174,9 @@ class UserInfoView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request):
-        user, user_type = get_authenticated_user(request)
-        serializer_class = UserAccountSerializer if user_type == "user_account" else TeamSerializer
-        serializer = serializer_class(user, data=request.data, partial=True)
+        """Partial update of logged-in user's profile"""
+        user = request.user
+        serializer = UserAccountSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             if "password" in serializer.validated_data:
                 serializer.validated_data["password"] = make_password(serializer.validated_data["password"])
@@ -213,46 +185,10 @@ class UserInfoView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request):
-        user, _ = get_authenticated_user(request)
+        """Allow logged-in user to delete their own account"""
+        user = request.user
         user.delete()
         return Response({"message": "Account deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
-
-# class UserInfoView(APIView):
-#     permission_classes = [IsAuthenticated]
-#
-#     def get(self, request):
-#         user = request.user
-#         serializer = UserAccountSerializer(user)
-#         return Response(serializer.data, status=status.HTTP_200_OK)
-#
-#     def put(self, request):
-#         """Full update of logged-in user's profile"""
-#         user = request.user
-#         serializer = UserAccountSerializer(user, data=request.data)
-#         if serializer.is_valid():
-#             # Handle password hashing if updated
-#             if "password" in serializer.validated_data:
-#                 serializer.validated_data["password"] = make_password(serializer.validated_data["password"])
-#             serializer.save()
-#             return Response(serializer.data, status=status.HTTP_200_OK)
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-#
-#     def patch(self, request):
-#         """Partial update of logged-in user's profile"""
-#         user = request.user
-#         serializer = UserAccountSerializer(user, data=request.data, partial=True)
-#         if serializer.is_valid():
-#             if "password" in serializer.validated_data:
-#                 serializer.validated_data["password"] = make_password(serializer.validated_data["password"])
-#             serializer.save()
-#             return Response(serializer.data, status=status.HTTP_200_OK)
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-#
-#     def delete(self, request):
-#         """Allow logged-in user to delete their own account"""
-#         user = request.user
-#         user.delete()
-#         return Response({"message": "Account deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
 
 
 class ChangePasswordView(APIView):
@@ -744,22 +680,41 @@ class TeamMembersViewSet(viewsets.ViewSet):
             data['user'] = request.user.id  # link to the farm admin creating the member
 
             if 'password' in data and data['password']:
-                data['password'] = make_password(data['password'])  # hash password
+                raw_password = data['password']
+                data['password'] = make_password(raw_password)  # hash password
+            else:
+                return Response({
+                    "error": True,
+                    "message": "Password is required"
+                }, status=status.HTTP_400_BAD_REQUEST)
 
             serializer = TeamSerializer(data=data)
             if serializer.is_valid():
-                serializer.save()
+                team_member = serializer.save()
+
+                # Create corresponding UserAccount
+                user_account, created = UserAccount.objects.get_or_create(
+                    email=team_member.email,
+                    name=team_member.name,
+                    phone=team_member.phone,
+                    defaults={
+                        "password": make_password(request.data["password"]),
+                        "role": "farm_worker",
+                    }
+                )
+
                 return Response({
                     "error": False,
                     "message": "Team Member Created Successfully",
                     "data": serializer.data
                 }, status=status.HTTP_201_CREATED)
-            else:
-                return Response({
-                    "error": True,
-                    "message": "Validation Failed",
-                    "details": serializer.errors
-                }, status=status.HTTP_400_BAD_REQUEST)
+
+            return Response({
+                "error": True,
+                "message": "Validation Failed",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         except Exception as e:
             return Response({
                 "error": True,
@@ -823,11 +778,16 @@ class TeamMembersViewSet(viewsets.ViewSet):
     def destroy(self, request, pk=None):
         try:
             member = TeamMember.objects.get(pk=pk)
+
+            # Delete corresponding UserAccount (if it exists)
+            UserAccount.objects.filter(email=member.email).delete()
+
             member.delete()
             return Response({
                 "error": False,
                 "message": "Team Member Deleted Successfully"
             }, status=status.HTTP_200_OK)
+
         except TeamMember.DoesNotExist:
             return Response({
                 "error": True,
@@ -840,3 +800,235 @@ class TeamMembersViewSet(viewsets.ViewSet):
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
 
+
+# Leave requests
+class LeaveRequestViewSet(viewsets.ModelViewSet):
+    serializer_class = LeaveRequestSerializer
+
+    permission_classes_by_action = {
+        'create': [IsFarmManagerRole, IsAdminRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'destroy': [IsFarmManagerRole, IsAdminRole],
+        'update': [IsFarmManagerRole, IsAdminRole],
+        'retrieve': [IsFarmManagerRole, IsAdminRole, IsTeamMemberRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(self.action, self.permission_classes_by_action['default'])
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def get_queryset(self):
+        user = self.request.user
+        if IsAdminRole().has_permission(self.request, self):
+            # Admin sees all leave requests
+            return LeaveRequest.objects.all().order_by("-id")
+        elif IsFarmManagerRole().has_permission(self.request, self):
+            # Farm Admin sees all leaves of their associated team members
+            return LeaveRequest.objects.filter(team_member__user=user).order_by("-id")
+        else:
+            # Regular team member sees only their own leaves
+            return LeaveRequest.objects.filter(team_member__user=user, team_member__email=user.email).order_by("-id")
+
+    def list(self, request, *args, **kwargs):
+        try:
+            leaves = self.get_queryset()
+            serializer = LeaveRequestSerializer(leaves, many=True)
+            return Response({
+                "error": False,
+                "message": "All Leave Requests",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request, *args, **kwargs):
+        try:
+            user = request.user
+
+            # Find matching team member
+            try:
+                team_member = TeamMember.objects.get(email=user.email)
+            except TeamMember.DoesNotExist:
+                return Response({
+                    "error": True,
+                    "message": "Team member record not found for this user.",
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            start_date = serializer.validated_data["start_date"]
+            end_date = serializer.validated_data["end_date"]
+
+            if start_date > end_date:
+                return Response({
+                    "error": True,
+                    "message": "End date cannot be earlier than start date.",
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Prevent overlapping leave requests
+            overlap = LeaveRequest.objects.filter(
+                team_member=team_member,
+                start_date__lte=end_date,
+                end_date__gte=start_date
+            ).exists()
+
+            if overlap:
+                return Response({
+                    "error": True,
+                    "message": "You already have a leave request in this date range.",
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Calculate days
+            days = (end_date - start_date).days + 1
+
+            # Create leave request
+            leave = LeaveRequest.objects.create(
+                team_member=team_member,
+                leave_type=serializer.validated_data["leave_type"],
+                start_date=start_date,
+                end_date=end_date,
+                days=days,
+                status="Pending",
+            )
+
+            # ✅ CREATE NOTIFICATION
+            Notification.objects.create(
+                user=user,
+                title="Leave Request Submitted",
+                message=f"Your leave request for {start_date} to {end_date} ({days} days) has been submitted successfully.",
+                type="success",
+                category="team"
+            )
+
+            return Response({
+                "error": False,
+                "message": "Leave Request Created",
+                "data": LeaveRequestSerializer(leave).data
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, *args, **kwargs):
+        try:
+            leave = self.get_object()
+            serializer = self.get_serializer(leave)
+            return Response({
+                "error": False,
+                "message": "Leave Request Details",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, *args, **kwargs):
+        try:
+            leave = self.get_object()
+            serializer = self.get_serializer(leave, data=request.data, partial=False)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Leave Request Updated",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def partial_update(self, request, *args, **kwargs):
+        try:
+            leave = self.get_object()
+            serializer = self.get_serializer(leave, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Leave Request Partially Updated",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            leave = self.get_object()
+            leave.delete()
+            return Response({
+                "error": False,
+                "message": "Leave Request Deleted",
+                "data": None
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=["patch"], url_path="approve", permission_classes=[IsFarmManagerRole, IsAdminRole])
+    def approve(self, request, pk=None):
+        try:
+            leave = self.get_object()
+            leave.status = "Approved"
+            leave.save()
+            serializer = self.get_serializer(leave)
+            return Response({
+                "error": False,
+                "message": "Leave Request Approved",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "Could not approve leave",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=["patch"], url_path="reject", permission_classes=[IsFarmManagerRole, IsAdminRole])
+    def reject(self, request, pk=None):
+        try:
+            leave = self.get_object()
+            leave.status = "Rejected"
+            leave.save()
+            serializer = self.get_serializer(leave)
+            return Response({
+                "error": False,
+                "message": "Leave Request Rejected",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "Could not reject leave",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)

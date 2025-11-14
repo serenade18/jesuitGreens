@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from rest_framework.exceptions import ValidationError
 
-from greenApp.models import TeamRoles, Farm, NotificationPreference, Notification, TeamMember
+from greenApp.models import TeamRoles, Farm, NotificationPreference, Notification, TeamMember, LeaveRequest
 
 User = get_user_model()
 
@@ -34,6 +35,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
 
 class UserAccountSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False)
+
     class Meta:
         model = User
         fields = '__all__'
@@ -66,6 +68,16 @@ class NotificationSerializer(serializers.ModelSerializer):
 
 class TeamSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False)
+    role_name = serializers.CharField(source="role.role_name", read_only=True)
+
     class Meta:
         model = TeamMember
         fields = '__all__'
+
+
+class LeaveRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LeaveRequest
+        fields = "__all__"
+        read_only_fields = ["team_member", "status", "added_on", "days"]
+

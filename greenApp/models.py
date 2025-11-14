@@ -40,10 +40,11 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
         FARM_ADMIN = "farm_admin", "Farm Admin"
         AGROVET = "agrovet", "Agrovet"
         VET = "vet", "Vet"
+        FARM_WORKER = "farm_worker", "Farm Worker"
 
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=150)
-    role = models.CharField(max_length=20, choices=Role.choices, default=Role.FARM_ADMIN)
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.FARM_WORKER)
     phone = models.CharField(max_length=20, blank=True, null=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
@@ -144,12 +145,18 @@ class Notification(models.Model):
 
 # Team Members Model
 class TeamMember(models.Model):
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        ON_LEAVE = "on_leave", "OnLeave"
+        SUSPENDED = "suspended", "Suspended"
+
     id = models.AutoField(primary_key=True)
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=150)
     phone = models.CharField(max_length=20, blank=True, null=True)
     role = models.ForeignKey(TeamRoles,  on_delete=models.CASCADE, related_name="role")
     user = models.ForeignKey(UserAccount, on_delete=models.CASCADE, related_name="team_members")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
     password = models.CharField(max_length=255)  # store hashed password
     is_active = models.BooleanField(default=True)
     added_on = models.DateTimeField(default=timezone.now)
@@ -157,3 +164,24 @@ class TeamMember(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.role})"
+
+
+# Leave Request Modal
+class LeaveRequest(models.Model):
+    class Status(models.TextChoices):
+        APPROVED = "Approved", "Approved"
+        PENDING = "Pending", "Pending"
+        REJECTED = "Rejected", "Rejected"
+
+    id = models.AutoField(primary_key=True)
+    team_member = models.ForeignKey(TeamMember, on_delete=models.CASCADE, related_name="leaves")
+    leave_type = models.CharField(max_length=50)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    days = models.IntegerField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    added_on = models.DateTimeField(default=timezone.now)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.team_member.name} - {self.leave_type} ({self.status})"
