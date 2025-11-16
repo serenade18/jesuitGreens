@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 from django.contrib.auth.hashers import make_password, check_password
 from django.shortcuts import render, get_object_or_404
+from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.exceptions import ValidationError, PermissionDenied, AuthenticationFailed
 from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
@@ -16,11 +17,11 @@ from jwt import ExpiredSignatureError, InvalidTokenError
 
 from greenProject import settings
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, \
-    LeaveRequest, Salary
+    LeaveRequest, Salary, SalaryPayment
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
     NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
-    SalaryDetailSerializer
+    SalaryDetailSerializer, SalaryPaymentSerializer
 
 
 # Create your views here.
@@ -1182,3 +1183,202 @@ class SalaryViewSet(viewsets.ViewSet):
                 "message": "An Error Occurred",
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Salary Payment
+class SalaryPaymentViewSet(viewsets.ViewSet):
+    permission_classes_by_action = {
+        'create': [IsFarmManagerRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsFarmManagerRole, IsAdminRole, IsTeamMemberRole],
+        'update': [IsFarmManagerRole, IsAdminRole, IsTeamMemberRole],
+        'partial_update': [IsFarmManagerRole, IsAdminRole, IsTeamMemberRole],
+        'destroy': [IsFarmManagerRole, IsAdminRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(self.action, self.permission_classes_by_action["default"])
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def list(self, request):
+        try:
+            user = request.user
+
+            if IsAdminRole().has_permission(request, self):
+                payments = SalaryPayment.objects.all()
+            else:
+                payments = SalaryPayment.objects.filter(salary__employee__user=user)
+
+            serializer = SalaryPaymentSerializer(payments, many=True)
+            return Response({
+                "error": False,
+                "message": "Salary Payments Retrieved",
+                "data": serializer.data
+            })
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "Could not retrieve salary payments",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request):
+        try:
+            salary_id = request.data.get("salary")
+            if not salary_id:
+                return Response({
+                    "error": True,
+                    "message": "Salary ID is required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            salary = get_object_or_404(Salary, id=salary_id)
+
+            serializer = SalaryPaymentSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Salary Payment Recorded Successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response({
+                "error": True,
+                "message": "Validation Failed",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "Could not create salary payment",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, pk=None):
+        try:
+            payment = get_object_or_404(SalaryPayment, id=pk)
+            serializer = SalaryPaymentSerializer(payment)
+            return Response({
+                "error": False,
+                "message": "Salary Payment Retrieved",
+                "data": serializer.data
+            })
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "Could not retrieve salary payment",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        try:
+            payment = get_object_or_404(SalaryPayment, id=pk)
+            serializer = SalaryPaymentSerializer(payment, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Salary Payment Updated Successfully",
+                    "data": serializer.data
+                })
+            return Response({
+                "error": True,
+                "message": "Validation Failed",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "Could not update salary payment",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def partial_update(self, request, pk=None):
+        try:
+            payment = get_object_or_404(SalaryPayment, id=pk)
+            serializer = SalaryPaymentSerializer(payment, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Salary Payment Partially Updated",
+                    "data": serializer.data
+                })
+            return Response({
+                "error": True,
+                "message": "Validation Failed",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "Could not update salary payment",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        try:
+            payment = get_object_or_404(SalaryPayment, id=pk)
+            payment.delete()
+            return Response({
+                "error": False,
+                "message": "Salary Payment Deleted Successfully"
+            })
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "Could not delete salary payment",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=["post"])
+    def process_payroll(self, request):
+        try:
+            salaries = Salary.objects.filter(status__iexact="Pending")
+
+            processed = []
+
+            for salary in salaries:
+                payment = SalaryPayment.objects.create(
+                    salary=salary,
+                    amount=salary.monthly_salary,
+                    method="CASH",  # or MPESA if you want
+                    reference=f"PAY-{timezone.now().timestamp()}",
+                    success=True,
+                )
+
+                salary.status = "Paid"
+                salary.last_paid = timezone.now().date()
+                salary.save()
+
+                processed.append({
+                    "salary_id": salary.id,
+                    "employee": salary.employee.name,
+                    "amount": str(payment.amount),
+                    "date": payment.date,
+                })
+
+            return Response({
+                "error": False,
+                "message": "Payroll processed successfully",
+                "data": processed
+            }, status=200)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "Failed to process payroll",
+                "details": str(e)
+            }, status=400)
+
