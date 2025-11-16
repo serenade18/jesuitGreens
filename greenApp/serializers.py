@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.exceptions import ValidationError
 
 from greenApp.models import TeamRoles, Farm, NotificationPreference, Notification, TeamMember, LeaveRequest, Salary, \
-    SalaryPayment, DairyCattle
+    SalaryPayment, DairyCattle, MilkCollection
 
 User = get_user_model()
 
@@ -131,3 +131,27 @@ class DairyCattleSerializer(serializers.ModelSerializer):
     class Meta:
         model = DairyCattle
         fields = '__all__'
+
+
+class MilkCollectionSerializer(serializers.ModelSerializer):
+    animal_name = serializers.SerializerMethodField()
+    class Meta:
+        model = MilkCollection
+        fields = [
+            "id",
+            "animal_name",
+            "animal",
+            "collection_date",
+            "collection_time",
+            "session",
+            "quantity",
+            "quality",
+            "collected_by",
+            "notes",
+            "added_on"
+        ]
+
+
+    def get_animal_name(self, obj):
+        # Return the TeamMember's name
+        return obj.animal.animal_name

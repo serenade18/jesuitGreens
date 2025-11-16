@@ -14,16 +14,17 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from jwt import ExpiredSignatureError, InvalidTokenError
+from django.utils.dateparse import parse_date
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 
 from greenProject import settings
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, \
-    LeaveRequest, Salary, SalaryPayment, DairyCattle
+    LeaveRequest, Salary, SalaryPayment, DairyCattle, MilkCollection
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
     NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
-    SalaryDetailSerializer, SalaryPaymentSerializer, DairyCattleSerializer
+    SalaryDetailSerializer, SalaryPaymentSerializer, DairyCattleSerializer, MilkCollectionSerializer
 
 
 # Create your views here.
@@ -46,6 +47,7 @@ def decode_manual_token(token: str, verify_exp=True) -> dict:
     except jwt.InvalidTokenError:
         raise AuthenticationFailed("Invalid manual token")
 
+
 def decode_team_member_token(token: str):
     try:
         decoded = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
@@ -60,6 +62,7 @@ def decode_team_member_token(token: str):
     except TeamMember.DoesNotExist:
         raise AuthenticationFailed("Team member not found")
 
+
 # Decode UserAccount via SimpleJWT
 def decode_user_account_token(token: str):
     jwt_auth = JWTAuthentication()
@@ -69,6 +72,7 @@ def decode_user_account_token(token: str):
         return user, "user_account"
     except Exception:
         raise AuthenticationFailed("Invalid UserAccount token")
+
 
 # Unified get_authenticated_user
 def get_authenticated_user(request):
@@ -1386,7 +1390,7 @@ class SalaryPaymentViewSet(viewsets.ViewSet):
             }, status=400)
 
 
-# Dair cattle
+# Dairy cattle
 class DairyCattleViewSet(viewsets.ModelViewSet):
     queryset = DairyCattle.objects.all().order_by('-id')
     serializer_class = DairyCattleSerializer
@@ -1448,4 +1452,162 @@ class DairyCattleViewSet(viewsets.ModelViewSet):
         cattle = self.get_object()
         cattle.delete()
         return self.response(False, "Cattle deleted successfully", None, status.HTTP_204_NO_CONTENT)
+
+
+# Milk collection
+class MilkCollectionViewSet(viewsets.ViewSet):
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'destroy': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(self.action, self.permission_classes_by_action['default'])
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def list(self, request):
+        try:
+            milk_qs = MilkCollection.objects.all().order_by('-id')
+
+            # Filtering by animal_id
+            animal_id = request.query_params.get('animal_id')
+            if animal_id:
+                milk_qs = milk_qs.filter(animal_id=animal_id)
+
+            # Filtering by session
+            session = request.query_params.get('session')
+            if session:
+                milk_qs = milk_qs.filter(session__iexact=session)
+
+            # Filtering by date range
+            start_date = request.query_params.get('start_date')
+            end_date = request.query_params.get('end_date')
+            if start_date:
+                start_date_parsed = parse_date(start_date)
+                if start_date_parsed:
+                    milk_qs = milk_qs.filter(collection_date__gte=start_date_parsed)
+            if end_date:
+                end_date_parsed = parse_date(end_date)
+                if end_date_parsed:
+                    milk_qs = milk_qs.filter(collection_date__lte=end_date_parsed)
+
+            serializer = MilkCollectionSerializer(milk_qs, many=True)
+            return Response({
+                "error": False,
+                "message": "Filtered Milk Collection Data",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, pk=None):
+        try:
+            milk = MilkCollection.objects.get(pk=pk)
+            serializer = MilkCollectionSerializer(milk)
+            return Response({
+                "error": False,
+                "message": "Milk Collection Retrieved",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except MilkCollection.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Milk Collection Not Found"
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request):
+        serializer = MilkCollectionSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Milk Collection Created",
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED)
+        return Response({
+            "error": True,
+            "message": "Validation Error",
+            "details": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        try:
+            milk = MilkCollection.objects.get(pk=pk)
+            serializer = MilkCollectionSerializer(milk, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Milk Collection Updated",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+            return Response({
+                "error": True,
+                "message": "Validation Error",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except MilkCollection.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Milk Collection Not Found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    def partial_update(self, request, pk=None):
+        try:
+            milk = MilkCollection.objects.get(pk=pk)
+            serializer = MilkCollectionSerializer(milk, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Milk Collection Partially Updated",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+            return Response({
+                "error": True,
+                "message": "Validation Error",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except MilkCollection.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Milk Collection Not Found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    def destroy(self, request, pk=None):
+        try:
+            milk = MilkCollection.objects.get(pk=pk)
+            milk.delete()
+            return Response({
+                "error": False,
+                "message": "Milk Collection Deleted"
+            }, status=status.HTTP_200_OK)
+        except MilkCollection.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Milk Collection Not Found"
+            }, status=status.HTTP_404_NOT_FOUND)
 

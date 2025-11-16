@@ -282,25 +282,53 @@ class DairyCattle(models.Model):
     birth_weight = models.DecimalField(max_digits=5, decimal_places=1, blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, blank=True, null=True)
-
-    # --- PEDIGREE ---
     sire = models.CharField(max_length=100, blank=True, null=True)
     grand_sire = models.CharField(max_length=100, blank=True, null=True)
     dam = models.CharField(max_length=100, blank=True, null=True)
     grand_dam = models.CharField(max_length=100, blank=True, null=True)
-
-    # --- ADDITIONAL DETAILS ---
     lactations = models.IntegerField(blank=True, null=True)
     color = models.CharField(max_length=50, blank=True, null=True)
     source = models.CharField(max_length=100, blank=True, null=True)
     ksb_no = models.CharField(max_length=100, blank=True, null=True)
     grade = models.CharField(max_length=50, blank=True, null=True)
     milk_target = models.DecimalField(max_digits=5, decimal_places=1, blank=True, null=True)
-
-    # --- NOTES ---
     notes = models.TextField(blank=True, null=True)
     added_on = models.DateTimeField(auto_now_add=True)
     objects = models.Manager()
 
     def __str__(self):
         return f"{self.animal_id} ({self.breed})"
+
+
+# Milk Collection
+class MilkCollection(models.Model):
+    SESSIONS = [
+        ("morning", "Morning"),
+        ("afternoon", "Afternoon"),
+        ("evening", "Evening"),
+    ]
+    QUALITIES = [
+        ("excellent", "Excellent"),
+        ("good", "Good"),
+        ("fair", "Fair"),
+        ("poor", "Poor"),
+    ]
+
+    animal = models.ForeignKey(DairyCattle, on_delete=models.CASCADE, related_name="milk_collections")
+    collection_date = models.DateField()
+    collection_time = models.TimeField()
+    session = models.CharField(max_length=20, choices=SESSIONS)
+    quantity = models.FloatField()
+    quality = models.CharField(max_length=20, choices=QUALITIES)
+    collected_by = models.CharField(max_length=255)
+    notes = models.TextField(blank=True, null=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    class Meta:
+        ordering = ["-collection_date", "-collection_time"]
+
+    def __str__(self):
+        return f"{self.quantity}L from {self.animal.name} on {self.collection_date}"
+
+
