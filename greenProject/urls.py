@@ -7,7 +7,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from greenApp.views import UserViewSet, UserInfoView, ChangePasswordView, TeamRolesViewSet, FarmViewSet, \
     NotificationPreferenceViewSet, NotificationsViewSet, TeamMembersViewSet, LoginViewSet, UnifiedRefreshView, \
-    LeaveRequestViewSet, SalaryViewSet, SalaryPaymentViewSet
+    LeaveRequestViewSet, SalaryViewSet, SalaryPaymentViewSet, DairyCattleViewSet
 
 router = routers.DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -19,6 +19,7 @@ router.register(r'notification-prefs', NotificationPreferenceViewSet, basename='
 router.register(r'leave-requests', LeaveRequestViewSet, basename='leave-requests')
 router.register(r'salary', SalaryViewSet, basename='salary')
 router.register(r'salary-payment', SalaryPaymentViewSet, basename='salary-payment')
+router.register(r'dairy-cattle', DairyCattleViewSet, basename='dairy-cattle')
 
 
 urlpatterns = [

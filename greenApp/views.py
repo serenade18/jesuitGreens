@@ -14,14 +14,16 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from jwt import ExpiredSignatureError, InvalidTokenError
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
 
 from greenProject import settings
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, \
-    LeaveRequest, Salary, SalaryPayment
+    LeaveRequest, Salary, SalaryPayment, DairyCattle
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
     NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
-    SalaryDetailSerializer, SalaryPaymentSerializer
+    SalaryDetailSerializer, SalaryPaymentSerializer, DairyCattleSerializer
 
 
 # Create your views here.
@@ -95,7 +97,7 @@ class LoginViewSet(viewsets.ViewSet):
             return Response({"error": True, "message": "Email and password are required"},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        # 1️⃣ UserAccount login
+        #  UserAccount login
         try:
             user = UserAccount.objects.get(email=email)
             if user.check_password(password):
@@ -107,7 +109,7 @@ class LoginViewSet(viewsets.ViewSet):
         except UserAccount.DoesNotExist:
             pass
 
-        # 2️⃣ TeamMember login
+        #  TeamMember login
         try:
             team_member = TeamMember.objects.get(email=email, is_active=True)
             if check_password(password, team_member.password):
@@ -312,6 +314,7 @@ class UserViewSet(viewsets.ViewSet):
 
         user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+# --- User Info ---
 
 
 # Team roles
@@ -1381,4 +1384,68 @@ class SalaryPaymentViewSet(viewsets.ViewSet):
                 "message": "Failed to process payroll",
                 "details": str(e)
             }, status=400)
+
+
+# Dair cattle
+class DairyCattleViewSet(viewsets.ModelViewSet):
+    queryset = DairyCattle.objects.all().order_by('-id')
+    serializer_class = DairyCattleSerializer
+    permission_classes = [IsAuthenticated]     # Override per action if needed
+
+    # ---- Filters, search, ordering ----
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['breed', 'category', 'animal_type']
+    search_fields = ['animal_name', 'tag_number', 'breed', 'category']
+    ordering_fields = ['created_at', 'date_of_birth', 'animal_name']
+    # ---- Standard response wrapper ----
+    def response(self, error, message, data=None, status_code=status.HTTP_200_OK):
+        return Response({
+            "error": error,
+            "message": message,
+            "data": data
+        }, status=status_code)
+
+    # ---- CREATE ----
+    def create(self, request, *args, **kwargs):
+        serializer = DairyCattleSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return self.response(False, "Cattle added successfully", serializer.data, status.HTTP_201_CREATED)
+        return self.response(True, "Validation Error", serializer.errors, status.HTTP_400_BAD_REQUEST)
+
+    # ---- LIST ----
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = DairyCattleSerializer(queryset, many=True)
+        return self.response(False, "Cattle list fetched", serializer.data)
+
+    # ---- RETRIEVE ----
+    def retrieve(self, request, pk=None, *args, **kwargs):
+        cattle = self.get_object()
+        serializer = DairyCattleSerializer(cattle)
+        return self.response(False, "Cattle details fetched", serializer.data)
+
+    # ---- UPDATE ----
+    def update(self, request, *args, **kwargs):
+        cattle = self.get_object()
+        serializer = DairyCattleSerializer(cattle, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return self.response(False, "Cattle updated successfully", serializer.data)
+        return self.response(True, "Validation Error", serializer.errors, status.HTTP_400_BAD_REQUEST)
+
+    # ---- PARTIAL UPDATE ----
+    def partial_update(self, request, *args, **kwargs):
+        cattle = self.get_object()
+        serializer = DairyCattleSerializer(cattle, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return self.response(False, "Cattle updated successfully", serializer.data)
+        return self.response(True, "Validation Error", serializer.errors, status.HTTP_400_BAD_REQUEST)
+
+    # ---- DELETE ----
+    def destroy(self, request, *args, **kwargs):
+        cattle = self.get_object()
+        cattle.delete()
+        return self.response(False, "Cattle deleted successfully", None, status.HTTP_204_NO_CONTENT)
 

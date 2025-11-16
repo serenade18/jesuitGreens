@@ -242,3 +242,65 @@ class SalaryPayment(models.Model):
 
     def __str__(self):
         return f"{self.salary.employee.name} — {self.amount} on {self.date.date()}"
+
+
+# Cattle Info
+class DairyCattle(models.Model):
+    ANIMAL_TYPES = [
+        ("dairy", "Dairy"),
+    ]
+
+    BREED_CHOICES = [
+        ("ayshire", "Ayshire"),
+        ("boran", "Boran"),
+        ("brown swiss", "Brown Swiss"),
+        ("fleckvieh", "Fleckvieh"),
+        ("gurnsey", "Gurnsey"),
+        ("holstein friesian", "Holstein Friesian"),
+        ("jersey", "Jersey"),
+        ("red friesian", "Red Friesian"),
+        ("sahiwal", "Sahiwal"),
+        ("other", "Other"),
+    ]
+
+    CATEGORY_CHOICES = [
+        ("calf", "Calf (0-4 months)"),
+        ("weaner", "Weaner (4-8 months)"),
+        ("heifer", "Heifer (9-10 months)"),
+        ("yearling", "Yearling (11-13 months)"),
+        ("bulling heifer", "Bulling Heifer (14-18 months)"),
+        ("incalf heifer", "Incalf Heifer"),
+        ("dry", "Dry (2 months to calving)"),
+        ("milker", "Milker (After Calving)"),
+        ("bull", "Bull (Male calves above 3 months)"),
+    ]
+
+    animal_type = models.CharField(max_length=20, choices=ANIMAL_TYPES, default="dairy")
+    animal_name = models.CharField(max_length=50, unique=True)
+    breed = models.CharField(max_length=50, choices=BREED_CHOICES, blank=True, null=True)
+    tag_number = models.CharField(max_length=50, blank=True, null=True)
+    birth_weight = models.DecimalField(max_digits=5, decimal_places=1, blank=True, null=True)
+    date_of_birth = models.DateField(blank=True, null=True)
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, blank=True, null=True)
+
+    # --- PEDIGREE ---
+    sire = models.CharField(max_length=100, blank=True, null=True)
+    grand_sire = models.CharField(max_length=100, blank=True, null=True)
+    dam = models.CharField(max_length=100, blank=True, null=True)
+    grand_dam = models.CharField(max_length=100, blank=True, null=True)
+
+    # --- ADDITIONAL DETAILS ---
+    lactations = models.IntegerField(blank=True, null=True)
+    color = models.CharField(max_length=50, blank=True, null=True)
+    source = models.CharField(max_length=100, blank=True, null=True)
+    ksb_no = models.CharField(max_length=100, blank=True, null=True)
+    grade = models.CharField(max_length=50, blank=True, null=True)
+    milk_target = models.DecimalField(max_digits=5, decimal_places=1, blank=True, null=True)
+
+    # --- NOTES ---
+    notes = models.TextField(blank=True, null=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.animal_id} ({self.breed})"
