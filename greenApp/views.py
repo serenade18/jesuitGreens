@@ -20,11 +20,12 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 
 from greenProject import settings
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, \
-    LeaveRequest, Salary, SalaryPayment, DairyCattle, MilkCollection
+    LeaveRequest, Salary, SalaryPayment, DairyCattle, MilkCollection, MapDrawing
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
     NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
-    SalaryDetailSerializer, SalaryPaymentSerializer, DairyCattleSerializer, MilkCollectionSerializer
+    SalaryDetailSerializer, SalaryPaymentSerializer, DairyCattleSerializer, MilkCollectionSerializer, \
+    MapDrawingSerializer
 
 
 # Create your views here.
@@ -1610,4 +1611,129 @@ class MilkCollectionViewSet(viewsets.ViewSet):
                 "error": True,
                 "message": "Milk Collection Not Found"
             }, status=status.HTTP_404_NOT_FOUND)
+
+
+# Map geofence
+class MapDrawingViewSet(viewsets.ModelViewSet):
+    queryset = MapDrawing.objects.all().order_by('-added_on')
+    serializer_class = MapDrawingSerializer
+
+    # Role permissions
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'destroy': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'default': [IsAuthenticated],
+    }
+
+    # Custom permissions handler
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action['default']
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    # ---------- CREATE ----------
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Drawing saved successfully",
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "error": True,
+            "message": "Validation error",
+            "details": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # ---------- LIST ----------
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+
+        return Response({
+            "error": False,
+            "message": "Drawings fetched successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    # ---------- RETRIEVE ----------
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+
+        return Response({
+            "error": False,
+            "message": "Drawing retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    # ---------- UPDATE ----------
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Drawing updated successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            "error": True,
+            "message": "Validation error",
+            "details": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # ---------- PARTIAL UPDATE ----------
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(
+            instance, data=request.data, partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Drawing updated successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            "error": True,
+            "message": "Validation error",
+            "details": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # ---------- DELETE ----------
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+
+        return Response({
+            "error": False,
+            "message": "Drawing deleted successfully",
+            "data": None
+        }, status=status.HTTP_200_OK)
+
 

@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.db import models
+from django.db.models import JSONField
 from django.utils import timezone
 
 from greenProject import settings
@@ -331,4 +332,31 @@ class MilkCollection(models.Model):
     def __str__(self):
         return f"{self.quantity}L from {self.animal.name} on {self.collection_date}"
 
+
+# Map section
+class MapDrawing(models.Model):
+    DRAWING_TYPES = [
+        ('polygon', 'Polygon'),
+        ('polyline', 'Polyline'),
+        ('marker', 'Marker')
+    ]
+
+    CATEGORY_CHOICES = [
+        ('irrigation', 'Irrigation'),
+        ('fencing', 'Fencing'),
+        ('field', 'Field'),
+        ('crop-zone', 'Crop Zone'),
+    ]
+
+    type = models.CharField(max_length=20, choices=DRAWING_TYPES)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    coordinates = JSONField()  # stores list of lat/lng objects OR single lat/lng
+    area = models.FloatField(null=True, blank=True)   # for polygons
+    length = models.FloatField(null=True, blank=True) # for polylines
+    label = models.CharField(max_length=255)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.type} - {self.category} - {self.label}"
 

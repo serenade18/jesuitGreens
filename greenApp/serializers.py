@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.exceptions import ValidationError
 
 from greenApp.models import TeamRoles, Farm, NotificationPreference, Notification, TeamMember, LeaveRequest, Salary, \
-    SalaryPayment, DairyCattle, MilkCollection
+    SalaryPayment, DairyCattle, MilkCollection, MapDrawing
 
 User = get_user_model()
 
@@ -151,7 +151,11 @@ class MilkCollectionSerializer(serializers.ModelSerializer):
             "added_on"
         ]
 
-
     def get_animal_name(self, obj):
-        # Return the TeamMember's name
         return obj.animal.animal_name
+
+
+class MapDrawingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MapDrawing
+        fields = '__all__'
