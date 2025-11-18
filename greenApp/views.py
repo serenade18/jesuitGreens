@@ -1645,7 +1645,6 @@ class MapDrawingViewSet(viewsets.ModelViewSet):
 
         return [AnyPermission()]
 
-    # ---------- CREATE ----------
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
 
@@ -1663,7 +1662,6 @@ class MapDrawingViewSet(viewsets.ModelViewSet):
             "details": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    # ---------- LIST ----------
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
         serializer = self.get_serializer(queryset, many=True)
@@ -1674,7 +1672,6 @@ class MapDrawingViewSet(viewsets.ModelViewSet):
             "data": serializer.data
         }, status=status.HTTP_200_OK)
 
-    # ---------- RETRIEVE ----------
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = self.get_serializer(instance)
@@ -1685,7 +1682,6 @@ class MapDrawingViewSet(viewsets.ModelViewSet):
             "data": serializer.data
         }, status=status.HTTP_200_OK)
 
-    # ---------- UPDATE ----------
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data)
@@ -1704,7 +1700,6 @@ class MapDrawingViewSet(viewsets.ModelViewSet):
             "details": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    # ---------- PARTIAL UPDATE ----------
     def partial_update(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = self.get_serializer(
@@ -1725,7 +1720,6 @@ class MapDrawingViewSet(viewsets.ModelViewSet):
             "details": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    # ---------- DELETE ----------
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         instance.delete()
