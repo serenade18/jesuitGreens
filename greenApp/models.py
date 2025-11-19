@@ -360,3 +360,32 @@ class MapDrawing(models.Model):
     def __str__(self):
         return f"{self.type} - {self.category} - {self.label}"
 
+
+# Birds Model
+class PoultryBatch(models.Model):
+    ANIMAL_TYPES = [
+        ("poultry", "Poultry"),
+    ]
+
+    CATEGORY_CHOICES = [
+        ('layers', 'Layers'),
+        ('broilers', 'Broilers'),
+        ('improved_kienyeji', 'Improved Kienyeji'),
+    ]
+
+    animal_type = models.CharField(max_length=20, choices=ANIMAL_TYPES, default="poultry")
+    category = models.CharField(
+        max_length=50,
+        choices=CATEGORY_CHOICES,
+    )
+
+    breed = models.CharField(max_length=100)
+    age_in_days = models.PositiveIntegerField()
+    number_of_chicks = models.PositiveIntegerField()
+    vaccinated = models.BooleanField(default=False)
+    notes = models.TextField(blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.category.title()} - {self.breed} ({self.number_of_chicks} chicks)"
