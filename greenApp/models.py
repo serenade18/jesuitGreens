@@ -372,13 +372,11 @@ class PoultryBatch(models.Model):
         ('broilers', 'Broilers'),
         ('improved_kienyeji', 'Improved Kienyeji'),
     ]
-
     animal_type = models.CharField(max_length=20, choices=ANIMAL_TYPES, default="poultry")
     category = models.CharField(
         max_length=50,
         choices=CATEGORY_CHOICES,
     )
-
     breed = models.CharField(max_length=100)
     age_in_days = models.PositiveIntegerField()
     number_of_chicks = models.PositiveIntegerField()

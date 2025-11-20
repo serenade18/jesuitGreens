@@ -161,7 +161,7 @@ class MapDrawingSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class PoultryBatchSerializet(serializers.ModelSerializer):
+class PoultryRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = PoultryBatch
         fields = '__all__'
