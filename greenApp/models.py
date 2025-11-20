@@ -389,3 +389,35 @@ class PoultryBatch(models.Model):
 
     def __str__(self):
         return f"{self.category.title()} - {self.breed} ({self.number_of_chicks} chicks)"
+
+
+# Calving Record Model
+class CalvingRecord(models.Model):
+    GENDER_CHOICES = [
+        ("male", "Male"),
+        ("female", "Female"),
+    ]
+
+    animal = models.ForeignKey(
+        "DairyCattle",
+        on_delete=models.CASCADE,
+        related_name="calving_records"
+    )
+    calving_date = models.DateField()
+    calf_name = models.CharField(max_length=255)
+    calf_gender = models.CharField(max_length=10, choices=GENDER_CHOICES)
+    birth_weight = models.DecimalField(max_digits=6, decimal_places=2)
+    complications = models.TextField(blank=True, null=True)
+    assistance_required = models.BooleanField(default=False)
+    veterinarian = models.CharField(max_length=255, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    objects = models.Manager()
+
+    class Meta:
+        ordering = ["-calving_date"]
+
+    def __str__(self):
+        return f"{self.animal.id} — {self.calf_name} ({self.calving_date})"
+
