@@ -421,3 +421,46 @@ class CalvingRecord(models.Model):
     def __str__(self):
         return f"{self.animal.id} — {self.calf_name} ({self.calving_date})"
 
+
+# Medication model
+class Medication(models.Model):
+    TREATMENT_TYPES = (
+        ("antibiotic", "Antibiotic"),
+        ("deworming", "Deworming"),
+        ("vaccination", "Vaccination"),
+        ("vitamin", "Vitamin / Supplement"),
+        ("other", "Other"),
+    )
+
+    ADMINISTRATION_ROUTES = (
+        ("oral", "Oral"),
+        ("injection", "Injection"),
+        ("topical", "Topical"),
+        ("intravenous", "Intravenous"),
+        ("other", "Other"),
+    )
+
+    animal = models.ForeignKey(
+        "DairyCattle",
+        on_delete=models.CASCADE,
+        related_name="medications"
+    )
+    medication_name = models.CharField(max_length=255)
+    treatment_type = models.CharField(max_length=50, choices=TREATMENT_TYPES)
+    dosage = models.CharField(max_length=100)
+    administration_route = models.CharField(max_length=50, choices=ADMINISTRATION_ROUTES)
+    treatment_date = models.DateField()
+    prescribed_by = models.CharField(max_length=255, null=True, blank=True)  # veterinarian or staff name
+    administered_by = models.CharField(max_length=255, null=True, blank=True)
+    duration_days = models.PositiveIntegerField(null=True, blank=True)
+    next_dose_date = models.DateField(null=True, blank=True)
+    reason = models.TextField(null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+    cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.medication_name} - {self.animal}"
+
+
