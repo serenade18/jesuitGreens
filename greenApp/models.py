@@ -477,3 +477,89 @@ class EggCollection(models.Model):
 
     def __str__(self):
         return f"Batch {self.batch_id} - {self.collection_date} ({self.total_eggs} eggs)"
+
+
+# Dairy Goat Info
+class DairyGoat(models.Model):
+    ANIMAL_TYPES = [
+        ("dairy", "Dairy"),
+    ]
+
+    BREED_CHOICES = [
+        ("alpine", "Alpine"),
+        ("boer", "Boer"),
+        ("jamunapari", "Jamunapari"),
+        ("nigerian dwarf", "Nigerian Dwarf"),
+        ("saanen", "Saanen"),
+        ("toggenburg", "Toggenburg"),
+        ("other", "Other"),
+    ]
+
+    CATEGORY_CHOICES = [
+        ("kid", "Kid (0-6 months)"),
+        ("doeling", "Doeling (Female kid 6-12 months)"),
+        ("buckling", "Buckling (Male kid 6-12 months)"),
+        ("yearling", "Yearling (12-18 months)"),
+        ("bulling doe", "Bulling Doe (18-24 months)"),
+        ("in-calf doe", "In-calf Doe"),
+        ("dry doe", "Dry Doe (2 months to kidding)"),
+        ("milker", "Milker (After Kidding)"),
+        ("buck", "Buck (Adult Male)"),
+    ]
+
+    animal_type = models.CharField(max_length=20, choices=ANIMAL_TYPES, default="dairy")
+    animal_name = models.CharField(max_length=50, unique=True)
+    breed = models.CharField(max_length=50, choices=BREED_CHOICES, blank=True, null=True)
+    tag_number = models.CharField(max_length=50, blank=True, null=True)
+    birth_weight = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
+    date_of_birth = models.DateField(blank=True, null=True)
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, blank=True, null=True)
+    sire = models.CharField(max_length=100, blank=True, null=True)
+    grand_sire = models.CharField(max_length=100, blank=True, null=True)
+    dam = models.CharField(max_length=100, blank=True, null=True)
+    grand_dam = models.CharField(max_length=100, blank=True, null=True)
+    lactations = models.IntegerField(blank=True, null=True)
+    color = models.CharField(max_length=50, blank=True, null=True)
+    source = models.CharField(max_length=100, blank=True, null=True)
+    ksb_no = models.CharField(max_length=100, blank=True, null=True)
+    grade = models.CharField(max_length=50, blank=True, null=True)
+    milk_target = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.animal_name} ({self.breed})"
+
+
+# Goat Milk Collection
+class GoatMilkCollection(models.Model):
+    SESSIONS = [
+        ("morning", "Morning"),
+        ("afternoon", "Afternoon"),
+        ("evening", "Evening"),
+    ]
+    QUALITIES = [
+        ("excellent", "Excellent"),
+        ("good", "Good"),
+        ("fair", "Fair"),
+        ("poor", "Poor"),
+    ]
+
+    animal = models.ForeignKey(DairyGoat, on_delete=models.CASCADE, related_name="milk_collections")
+    collection_date = models.DateField()
+    collection_time = models.TimeField()
+    session = models.CharField(max_length=20, choices=SESSIONS)
+    quantity = models.FloatField()
+    quality = models.CharField(max_length=20, choices=QUALITIES)
+    collected_by = models.CharField(max_length=255)
+    notes = models.TextField(blank=True, null=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    class Meta:
+        ordering = ["-collection_date", "-collection_time"]
+
+    def __str__(self):
+        return f"{self.quantity}L from {self.animal.animal_name} on {self.collection_date}"
+

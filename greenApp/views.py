@@ -21,13 +21,13 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from greenProject import settings
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, \
     LeaveRequest, Salary, SalaryPayment, DairyCattle, MilkCollection, MapDrawing, CalvingRecord, Medication, \
-    PoultryBatch, EggCollection
+    PoultryBatch, EggCollection, DairyGoat, GoatMilkCollection
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
     NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
     SalaryDetailSerializer, SalaryPaymentSerializer, DairyCattleSerializer, MilkCollectionSerializer, \
     MapDrawingSerializer, CalvingRecordSerializer, MedicationSerializer, PoultryRecordSerializer, \
-    EggCollectionSerializer
+    EggCollectionSerializer, DairyGoatSerializer, GoatMilkCollectionSerializer
 
 
 # Create your views here.
@@ -2424,3 +2424,226 @@ class EggCollectionViewSet(viewsets.ViewSet):
                 "error": True,
                 "message": "Egg Collection Not Found"
             }, status=status.HTTP_404_NOT_FOUND)
+
+
+# Dairy Goats records
+class DairyGoatViewSet(viewsets.ModelViewSet):
+    queryset = DairyGoat.objects.all().order_by('-id')
+    serializer_class = DairyGoatSerializer
+    permission_classes = [IsAuthenticated]     # Override per action if needed
+
+    # ---- Filters, search, ordering ----
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['breed', 'category', 'animal_type']
+    search_fields = ['animal_name', 'tag_number', 'breed', 'category']
+    ordering_fields = ['created_at', 'date_of_birth', 'animal_name']
+    # ---- Standard response wrapper ----
+    def response(self, error, message, data=None, status_code=status.HTTP_200_OK):
+        return Response({
+            "error": error,
+            "message": message,
+            "data": data
+        }, status=status_code)
+
+    # ---- CREATE ----
+    def create(self, request, *args, **kwargs):
+        serializer = DairyGoatSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return self.response(False, "goat added successfully", serializer.data, status.HTTP_201_CREATED)
+        return self.response(True, "Validation Error", serializer.errors, status.HTTP_400_BAD_REQUEST)
+
+    # ---- LIST ----
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = DairyGoatSerializer(queryset, many=True)
+        return self.response(False, "goat list fetched", serializer.data)
+
+    # ---- RETRIEVE ----
+    def retrieve(self, request, pk=None, *args, **kwargs):
+        goat = self.get_object()
+        serializer = DairyGoatSerializer(goat)
+        return self.response(False, "goat details fetched", serializer.data)
+
+    # ---- UPDATE ----
+    def update(self, request, *args, **kwargs):
+        goat = self.get_object()
+        serializer = DairyGoatSerializer(goat, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return self.response(False, "goat updated successfully", serializer.data)
+        return self.response(True, "Validation Error", serializer.errors, status.HTTP_400_BAD_REQUEST)
+
+    # ---- PARTIAL UPDATE ----
+    def partial_update(self, request, *args, **kwargs):
+        goat = self.get_object()
+        serializer = DairyGoatSerializer(goat, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return self.response(False, "goat updated successfully", serializer.data)
+        return self.response(True, "Validation Error", serializer.errors, status.HTTP_400_BAD_REQUEST)
+
+    # ---- DELETE ----
+    def destroy(self, request, *args, **kwargs):
+        goat = self.get_object()
+        goat.delete()
+        return self.response(False, "goat deleted successfully", None, status.HTTP_204_NO_CONTENT)
+
+
+# Milk collection
+class GoatMilkCollectionViewSet(viewsets.ViewSet):
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'destroy': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(self.action, self.permission_classes_by_action['default'])
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def list(self, request):
+        try:
+            milk_qs = GoatMilkCollection.objects.all().order_by('-id')
+
+            # Filtering by animal_id
+            animal_id = request.query_params.get('animal_id')
+            if animal_id:
+                milk_qs = milk_qs.filter(animal_id=animal_id)
+
+            # Filtering by session
+            session = request.query_params.get('session')
+            if session:
+                milk_qs = milk_qs.filter(session__iexact=session)
+
+            # Filtering by date range
+            start_date = request.query_params.get('start_date')
+            end_date = request.query_params.get('end_date')
+            if start_date:
+                start_date_parsed = parse_date(start_date)
+                if start_date_parsed:
+                    milk_qs = milk_qs.filter(collection_date__gte=start_date_parsed)
+            if end_date:
+                end_date_parsed = parse_date(end_date)
+                if end_date_parsed:
+                    milk_qs = milk_qs.filter(collection_date__lte=end_date_parsed)
+
+            serializer = GoatMilkCollectionSerializer(milk_qs, many=True)
+            return Response({
+                "error": False,
+                "message": "Filtered Milk Collection Data",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, pk=None):
+        try:
+            milk = GoatMilkCollection.objects.get(pk=pk)
+            serializer = GoatMilkCollectionSerializer(milk)
+            return Response({
+                "error": False,
+                "message": "Milk Collection Retrieved",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except GoatMilkCollection.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Milk Collection Not Found"
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request):
+        serializer = GoatMilkCollectionSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Milk Collection Created",
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED)
+        return Response({
+            "error": True,
+            "message": "Validation Error",
+            "details": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        try:
+            milk = GoatMilkCollection.objects.get(pk=pk)
+            serializer = GoatMilkCollectionSerializer(milk, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Milk Collection Updated",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+            return Response({
+                "error": True,
+                "message": "Validation Error",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except GoatMilkCollection.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Milk Collection Not Found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    def partial_update(self, request, pk=None):
+        try:
+            milk = GoatMilkCollection.objects.get(pk=pk)
+            serializer = GoatMilkCollectionSerializer(milk, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Milk Collection Partially Updated",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+            return Response({
+                "error": True,
+                "message": "Validation Error",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except GoatMilkCollection.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Milk Collection Not Found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    def destroy(self, request, pk=None):
+        try:
+            milk = GoatMilkCollection.objects.get(pk=pk)
+            milk.delete()
+            return Response({
+                "error": False,
+                "message": "Milk Collection Deleted"
+            }, status=status.HTTP_200_OK)
+        except GoatMilkCollection.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Milk Collection Not Found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
