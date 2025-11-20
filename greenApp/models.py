@@ -462,3 +462,18 @@ class Medication(models.Model):
         return f"{self.medication_name} - {self.animal}"
 
 
+# Eggs collection model
+class EggCollection(models.Model):
+    batch = models.ForeignKey(
+        'PoultryBatch',              # or your PoultryBatch model name
+        on_delete=models.CASCADE,
+        related_name='egg_collections'
+    )
+    collection_date = models.DateField()
+    total_eggs = models.PositiveIntegerField()
+    broken_eggs = models.PositiveIntegerField(null=True, blank=True, default=0)
+    notes = models.TextField(null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Batch {self.batch_id} - {self.collection_date} ({self.total_eggs} eggs)"

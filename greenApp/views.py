@@ -21,12 +21,13 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from greenProject import settings
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, \
     LeaveRequest, Salary, SalaryPayment, DairyCattle, MilkCollection, MapDrawing, CalvingRecord, Medication, \
-    PoultryBatch
+    PoultryBatch, EggCollection
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
     NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
     SalaryDetailSerializer, SalaryPaymentSerializer, DairyCattleSerializer, MilkCollectionSerializer, \
-    MapDrawingSerializer, CalvingRecordSerializer, MedicationSerializer, PoultryRecordSerializer
+    MapDrawingSerializer, CalvingRecordSerializer, MedicationSerializer, PoultryRecordSerializer, \
+    EggCollectionSerializer
 
 
 # Create your views here.
@@ -2247,3 +2248,179 @@ class PoultryRecordViewSet(viewsets.ViewSet):
                 "message": "Poultry Record Not Found"
             }, status=status.HTTP_404_NOT_FOUND)
 
+
+# Eggs collection records
+class EggCollectionViewSet(viewsets.ViewSet):
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'destroy': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action['default']
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    # ----------------------------------------------------
+    # LIST
+    # ----------------------------------------------------
+    def list(self, request):
+        try:
+            qs = EggCollection.objects.all().order_by("-collection_date")
+
+            # Optional filters
+            batch_id = request.query_params.get("batch_id")
+            if batch_id:
+                qs = qs.filter(batch_id=batch_id)
+
+            start_date = request.query_params.get("start_date")
+            end_date = request.query_params.get("end_date")
+
+            if start_date:
+                dt = parse_date(start_date)
+                if dt:
+                    qs = qs.filter(collection_date__gte=dt)
+
+            if end_date:
+                dt = parse_date(end_date)
+                if dt:
+                    qs = qs.filter(collection_date__lte=dt)
+
+            serializer = EggCollectionSerializer(qs, many=True)
+            return Response({
+                "error": False,
+                "message": "Egg Collections Retrieved",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # ----------------------------------------------------
+    # RETRIEVE
+    # ----------------------------------------------------
+    def retrieve(self, request, pk=None):
+        try:
+            record = EggCollection.objects.get(pk=pk)
+            serializer = EggCollectionSerializer(record)
+            return Response({
+                "error": False,
+                "message": "Egg Collection Retrieved",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except EggCollection.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Egg Collection Not Found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    # ----------------------------------------------------
+    # CREATE
+    # ----------------------------------------------------
+    def create(self, request):
+        serializer = EggCollectionSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Egg Collection Created Successfully",
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "error": True,
+            "message": "Validation Error",
+            "details": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # ----------------------------------------------------
+    # UPDATE
+    # ----------------------------------------------------
+    def update(self, request, pk=None):
+        try:
+            record = EggCollection.objects.get(pk=pk)
+            serializer = EggCollectionSerializer(record, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Egg Collection Updated Successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "error": True,
+                "message": "Validation Error",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except EggCollection.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Egg Collection Not Found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    # ----------------------------------------------------
+    # PARTIAL UPDATE
+    # ----------------------------------------------------
+    def partial_update(self, request, pk=None):
+        try:
+            record = EggCollection.objects.get(pk=pk)
+            serializer = EggCollectionSerializer(record, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Egg Collection Partially Updated",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "error": True,
+                "message": "Validation Error",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except EggCollection.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Egg Collection Not Found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    # ----------------------------------------------------
+    # DELETE
+    # ----------------------------------------------------
+    def destroy(self, request, pk=None):
+        try:
+            record = EggCollection.objects.get(pk=pk)
+            record.delete()
+            return Response({
+                "error": False,
+                "message": "Egg Collection Deleted"
+            }, status=status.HTTP_200_OK)
+
+        except EggCollection.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Egg Collection Not Found"
+            }, status=status.HTTP_404_NOT_FOUND)
