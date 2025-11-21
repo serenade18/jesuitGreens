@@ -21,13 +21,14 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from greenProject import settings
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, \
     LeaveRequest, Salary, SalaryPayment, DairyCattle, MilkCollection, MapDrawing, CalvingRecord, Medication, \
-    PoultryBatch, EggCollection, DairyGoat, GoatMilkCollection, KiddingRecord
+    PoultryBatch, EggCollection, DairyGoat, GoatMilkCollection, KiddingRecord, MortalityRecord
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
     NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
     SalaryDetailSerializer, SalaryPaymentSerializer, DairyCattleSerializer, MilkCollectionSerializer, \
     MapDrawingSerializer, CalvingRecordSerializer, MedicationSerializer, PoultryRecordSerializer, \
-    EggCollectionSerializer, DairyGoatSerializer, GoatMilkCollectionSerializer, KiddingRecordSerializer
+    EggCollectionSerializer, DairyGoatSerializer, GoatMilkCollectionSerializer, KiddingRecordSerializer, \
+    MortalityRecordSerializer
 
 
 # Create your views here.
@@ -2445,7 +2446,6 @@ class DairyGoatViewSet(viewsets.ModelViewSet):
             "data": data
         }, status=status_code)
 
-    # ---- CREATE ----
     def create(self, request, *args, **kwargs):
         serializer = DairyGoatSerializer(data=request.data)
         if serializer.is_valid():
@@ -2453,19 +2453,16 @@ class DairyGoatViewSet(viewsets.ModelViewSet):
             return self.response(False, "goat added successfully", serializer.data, status.HTTP_201_CREATED)
         return self.response(True, "Validation Error", serializer.errors, status.HTTP_400_BAD_REQUEST)
 
-    # ---- LIST ----
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
         serializer = DairyGoatSerializer(queryset, many=True)
         return self.response(False, "goat list fetched", serializer.data)
 
-    # ---- RETRIEVE ----
     def retrieve(self, request, pk=None, *args, **kwargs):
         goat = self.get_object()
         serializer = DairyGoatSerializer(goat)
         return self.response(False, "goat details fetched", serializer.data)
 
-    # ---- UPDATE ----
     def update(self, request, *args, **kwargs):
         goat = self.get_object()
         serializer = DairyGoatSerializer(goat, data=request.data)
@@ -2474,7 +2471,6 @@ class DairyGoatViewSet(viewsets.ModelViewSet):
             return self.response(False, "goat updated successfully", serializer.data)
         return self.response(True, "Validation Error", serializer.errors, status.HTTP_400_BAD_REQUEST)
 
-    # ---- PARTIAL UPDATE ----
     def partial_update(self, request, *args, **kwargs):
         goat = self.get_object()
         serializer = DairyGoatSerializer(goat, data=request.data, partial=True)
@@ -2483,7 +2479,6 @@ class DairyGoatViewSet(viewsets.ModelViewSet):
             return self.response(False, "goat updated successfully", serializer.data)
         return self.response(True, "Validation Error", serializer.errors, status.HTTP_400_BAD_REQUEST)
 
-    # ---- DELETE ----
     def destroy(self, request, *args, **kwargs):
         goat = self.get_object()
         goat.delete()
@@ -2714,15 +2709,15 @@ class KiddingRecordViewSet(viewsets.ViewSet):
 
     def retrieve(self, request, pk=None):
         try:
-            record = CalvingRecord.objects.get(pk=pk)
-            serializer = CalvingRecordSerializer(record)
+            record = KiddingRecord.objects.get(pk=pk)
+            serializer = KiddingRecordSerializer(record)
             return Response({
                 "error": False,
-                "message": "Calving Record Retrieved",
+                "message": "Kidding Record Retrieved",
                 "data": serializer.data
             }, status=status.HTTP_200_OK)
 
-        except CalvingRecord.DoesNotExist:
+        except KiddingRecord.DoesNotExist:
             return Response({
                 "error": True,
                 "message": "Calving Record Not Found"
@@ -2736,12 +2731,12 @@ class KiddingRecordViewSet(viewsets.ViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
     def create(self, request):
-        serializer = CalvingRecordSerializer(data=request.data)
+        serializer = KiddingRecordSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response({
                 "error": False,
-                "message": "Calving Record Created Successfully",
+                "message": "Kidding Record Created Successfully",
                 "data": serializer.data
             }, status=status.HTTP_201_CREATED)
 
@@ -2753,14 +2748,14 @@ class KiddingRecordViewSet(viewsets.ViewSet):
 
     def update(self, request, pk=None):
         try:
-            record = CalvingRecord.objects.get(pk=pk)
-            serializer = CalvingRecordSerializer(record, data=request.data)
+            record = KiddingRecord.objects.get(pk=pk)
+            serializer = KiddingRecordSerializer(record, data=request.data)
 
             if serializer.is_valid():
                 serializer.save()
                 return Response({
                     "error": False,
-                    "message": "Calving Record Updated Successfully",
+                    "message": "Kidding Record Updated Successfully",
                     "data": serializer.data
                 }, status=status.HTTP_200_OK)
 
@@ -2770,7 +2765,7 @@ class KiddingRecordViewSet(viewsets.ViewSet):
                 "details": serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        except CalvingRecord.DoesNotExist:
+        except KiddingRecord.DoesNotExist:
             return Response({
                 "error": True,
                 "message": "Calving Record Not Found"
@@ -2778,14 +2773,14 @@ class KiddingRecordViewSet(viewsets.ViewSet):
 
     def partial_update(self, request, pk=None):
         try:
-            record = CalvingRecord.objects.get(pk=pk)
-            serializer = CalvingRecordSerializer(record, data=request.data, partial=True)
+            record = KiddingRecord.objects.get(pk=pk)
+            serializer = KiddingRecordSerializer(record, data=request.data, partial=True)
 
             if serializer.is_valid():
                 serializer.save()
                 return Response({
                     "error": False,
-                    "message": "Calving Record Partially Updated",
+                    "message": "Kidding Record Partially Updated",
                     "data": serializer.data
                 }, status=status.HTTP_200_OK)
 
@@ -2795,28 +2790,69 @@ class KiddingRecordViewSet(viewsets.ViewSet):
                 "details": serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        except CalvingRecord.DoesNotExist:
+        except KiddingRecord.DoesNotExist:
             return Response({
                 "error": True,
-                "message": "Calving Record Not Found"
+                "message": "Kidding Record Not Found"
             }, status=status.HTTP_404_NOT_FOUND)
 
-    # ----------------------
-    # DELETE
-    # ----------------------
     def destroy(self, request, pk=None):
         try:
-            record = CalvingRecord.objects.get(pk=pk)
+            record = KiddingRecord.objects.get(pk=pk)
             record.delete()
 
             return Response({
                 "error": False,
-                "message": "Calving Record Deleted"
+                "message": "Kidding Record Deleted"
             }, status=status.HTTP_200_OK)
 
-        except CalvingRecord.DoesNotExist:
+        except KiddingRecord.DoesNotExist:
             return Response({
                 "error": True,
-                "message": "Calving Record Not Found"
+                "message": "Kidding Record Not Found"
             }, status=status.HTTP_404_NOT_FOUND)
 
+
+# Mortality Records
+class MortalityRecordViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        records = MortalityRecord.objects.all().order_by("-date")
+        serializer = MortalityRecordSerializer(records, many=True)
+        return Response({
+            "error": False,
+            "message": "Mortality records fetched successfully",
+            "data": serializer.data
+        })
+
+    def create(self, request):
+        serializer = MortalityRecordSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Mortality record created successfully",
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "error": True,
+            "message": "Validation error",
+            "details": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        try:
+            mortality = MortalityRecord.objects.get(pk=pk)
+            mortality.delete()
+            return Response({
+                "error": False,
+                "message": "Mortality record deleted successfully",
+                "data": pk
+            })
+        except MortalityRecord.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Mortality record not found"
+            }, status=status.HTTP_404_NOT_FOUND)

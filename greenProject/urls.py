@@ -9,7 +9,7 @@ from greenApp.views import UserViewSet, UserInfoView, ChangePasswordView, TeamRo
     NotificationPreferenceViewSet, NotificationsViewSet, TeamMembersViewSet, LoginViewSet, UnifiedRefreshView, \
     LeaveRequestViewSet, SalaryViewSet, SalaryPaymentViewSet, DairyCattleViewSet, MilkCollectionViewSet, \
     MapDrawingViewSet, CalvingRecordViewSet, MedicationViewSet, PoultryRecordViewSet, EggCollectionViewSet, \
-    DairyGoatViewSet, GoatMilkCollectionViewSet
+    DairyGoatViewSet, GoatMilkCollectionViewSet, KiddingRecordViewSet, MortalityRecordViewSet
 
 router = routers.DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -27,9 +27,11 @@ router.register(r'milk-collection', MilkCollectionViewSet, basename='milk-collec
 router.register(r'goat-milk', GoatMilkCollectionViewSet, basename='goat-milk')
 router.register(r'map', MapDrawingViewSet, basename='map')
 router.register(r'calving-records', CalvingRecordViewSet, basename="calving-records")
+router.register(r'kidding-records', KiddingRecordViewSet, basename="kidding-records")
 router.register(r'medications', MedicationViewSet, basename="medications")
 router.register(r'birds', PoultryRecordViewSet, basename="birds")
 router.register(r'egg-collections', EggCollectionViewSet, basename="egg-collections")
+router.register(r"mortality", MortalityRecordViewSet, basename="mortality")
 
 
 urlpatterns = [

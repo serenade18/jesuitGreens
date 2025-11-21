@@ -275,7 +275,7 @@ class DairyCattle(models.Model):
     animal_type = models.CharField(max_length=20, choices=ANIMAL_TYPES, default="dairy")
     animal_name = models.CharField(max_length=50, unique=True)
     breed = models.CharField(max_length=50, choices=BREED_CHOICES, blank=True, null=True)
-    tag_number = models.CharField(max_length=50, blank=True, null=True)
+    tag_number = models.CharField(max_length=50, blank=True, null=True, unique=True)
     birth_weight = models.DecimalField(max_digits=5, decimal_places=1, blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, blank=True, null=True)
@@ -506,7 +506,7 @@ class DairyGoat(models.Model):
     animal_type = models.CharField(max_length=20, choices=ANIMAL_TYPES, default="dairy")
     animal_name = models.CharField(max_length=50, unique=True)
     breed = models.CharField(max_length=50, choices=BREED_CHOICES, blank=True, null=True)
-    tag_number = models.CharField(max_length=50, blank=True, null=True)
+    tag_number = models.CharField(max_length=50, blank=True, null=True, unique=True)
     birth_weight = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, blank=True, null=True)
@@ -585,8 +585,25 @@ class KiddingRecord(models.Model):
     objects = models.Manager()
 
     class Meta:
-        ordering = ["-calving_date"]
+        ordering = ["-kidding_date"]
 
     def __str__(self):
         return f"{self.animal.id} — {self.kid_name} ({self.kidding_date})"
 
+
+# Chicken Mortality model
+class MortalityRecord(models.Model):
+    batch = models.ForeignKey(
+        'PoultryBatch',  # or your PoultryBatch model name
+        on_delete=models.CASCADE,
+        related_name='mortalities'
+    )
+    date = models.DateField()
+    number_of_deaths = models.PositiveIntegerField()
+    cause = models.CharField(max_length=255, null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"Mortality Record B{self.batch.id} - {self.number_of_deaths} deaths"
