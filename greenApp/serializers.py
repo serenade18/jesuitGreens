@@ -4,7 +4,7 @@ from rest_framework.exceptions import ValidationError
 
 from greenApp.models import TeamRoles, Farm, NotificationPreference, Notification, TeamMember, LeaveRequest, Salary, \
     SalaryPayment, DairyCattle, MilkCollection, MapDrawing, PoultryBatch, CalvingRecord, Medication, EggCollection, \
-    GoatMilkCollection, DairyGoat
+    GoatMilkCollection, DairyGoat, KiddingRecord
 
 User = get_user_model()
 
@@ -215,4 +215,9 @@ class GoatMilkCollectionSerializer(serializers.ModelSerializer):
     def get_animal_name(self, obj):
         return obj.animal.animal_name
 
+
+class KiddingRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = KiddingRecord
+        fields = "__all__"
 

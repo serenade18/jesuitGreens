@@ -252,16 +252,12 @@ class DairyCattle(models.Model):
     ]
 
     BREED_CHOICES = [
-        ("ayshire", "Ayshire"),
-        ("boran", "Boran"),
-        ("brown swiss", "Brown Swiss"),
-        ("fleckvieh", "Fleckvieh"),
-        ("gurnsey", "Gurnsey"),
-        ("holstein friesian", "Holstein Friesian"),
-        ("jersey", "Jersey"),
-        ("red friesian", "Red Friesian"),
-        ("sahiwal", "Sahiwal"),
-        ("other", "Other"),
+        ("alpine", "Alpine"),
+        ("saanen", "Saanen"),
+        ("toggenburg", "Toggenburg"),
+        ("anglo-nubian", "Anglo-Nubian"),
+        ("galla", "Galla"),
+        ("seag", "Seag")
     ]
 
     CATEGORY_CHOICES = [
@@ -562,4 +558,35 @@ class GoatMilkCollection(models.Model):
 
     def __str__(self):
         return f"{self.quantity}L from {self.animal.animal_name} on {self.collection_date}"
+
+
+# Kidding Record Model
+class KiddingRecord(models.Model):
+    GENDER_CHOICES = [
+        ("male", "Male"),
+        ("female", "Female"),
+    ]
+
+    animal = models.ForeignKey(
+        "DairyGoat",
+        on_delete=models.CASCADE,
+        related_name="kidding_records"
+    )
+    kidding_date = models.DateField()
+    kid_name = models.CharField(max_length=255)
+    kid_gender = models.CharField(max_length=10, choices=GENDER_CHOICES)
+    birth_weight = models.DecimalField(max_digits=6, decimal_places=2)
+    complications = models.TextField(blank=True, null=True)
+    assistance_required = models.BooleanField(default=False)
+    veterinarian = models.CharField(max_length=255, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    objects = models.Manager()
+
+    class Meta:
+        ordering = ["-calving_date"]
+
+    def __str__(self):
+        return f"{self.animal.id} — {self.kid_name} ({self.kidding_date})"
 
