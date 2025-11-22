@@ -643,3 +643,25 @@ class MilkSale(models.Model):
     def __str__(self):
         return f"Sale #{self.id} - {self.customer.name}"
 
+
+# Goat milk sale
+class GoatMilkSale(models.Model):
+    STATUS = [
+        ('paid', 'Paid'),
+        ('pending', 'Pending'),
+        ('partial', 'Partial')
+    ]
+
+    id = models.AutoField(primary_key=True)
+    customer = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name="goat_milk_sales")
+    quantity = models.FloatField()
+    price_per_liter = models.FloatField()
+    total_amount = models.FloatField()
+    status = models.CharField(max_length=20, choices=STATUS)
+    notes = models.TextField(null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"Sale #{self.id} - {self.customer.name}"
+
