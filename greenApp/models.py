@@ -607,3 +607,39 @@ class MortalityRecord(models.Model):
 
     def __str__(self):
         return f"Mortality Record B{self.batch.id} - {self.number_of_deaths} deaths"
+
+
+# Customers Model
+class Customers(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=255)
+    phone = models.CharField(max_length=255, unique=True)  # Unique
+    email = models.CharField(max_length=255, null=True, blank=True)
+    town = models.CharField(max_length=255, null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name}"
+
+
+# Dairy milk sales model
+class MilkSale(models.Model):
+    STATUS = [
+        ('paid', 'Paid'),
+        ('pending', 'Pending'),
+        ('partial', 'Partial')
+    ]
+
+    id = models.AutoField(primary_key=True)
+    customer = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name="milk_sales")
+    quantity = models.FloatField()
+    price_per_liter = models.FloatField()
+    total_amount = models.FloatField()
+    status = models.CharField(max_length=20, choices=STATUS)
+    notes = models.TextField(null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"Sale #{self.id} - {self.customer.name}"
+
