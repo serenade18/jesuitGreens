@@ -4,7 +4,7 @@ from rest_framework.exceptions import ValidationError
 
 from greenApp.models import TeamRoles, Farm, NotificationPreference, Notification, TeamMember, LeaveRequest, Salary, \
     SalaryPayment, DairyCattle, MilkCollection, MapDrawing, PoultryBatch, CalvingRecord, Medication, EggCollection, \
-    GoatMilkCollection, DairyGoat, KiddingRecord, MortalityRecord, MilkSale, Customers, GoatMilkSale
+    GoatMilkCollection, DairyGoat, KiddingRecord, MortalityRecord, MilkSale, Customers, GoatMilkSale, EggSale
 
 User = get_user_model()
 
@@ -324,3 +324,49 @@ class GoatMilkSaleSerializer(serializers.ModelSerializer):
             customer.save()
 
         return GoatMilkSale.objects.create(customer=customer, **validated_data)
+
+
+class EggSaleSerializer(serializers.ModelSerializer):
+    # Used only when creating/updating
+    customer = serializers.DictField(write_only=True)
+
+    # Returned in API responses
+    customer_details = CustomerSerializer(source="customer", read_only=True)
+
+    class Meta:
+        model = EggSale
+        fields = "__all__"
+        # Include customer_details in output
+        extra_fields = ['customer_details']
+
+    def validate(self, attrs):
+        customer_data = self.initial_data.get("customer")
+
+        if not customer_data:
+            raise serializers.ValidationError({"customer": "This field is required."})
+
+        if not customer_data.get("phone"):
+            raise serializers.ValidationError({
+                "customer": {"phone": "Phone is required"}
+            })
+
+        return attrs
+
+    def create(self, validated_data):
+        customer_data = validated_data.pop("customer")
+        phone = customer_data["phone"]
+
+        customer, created = Customers.objects.get_or_create(
+            phone=phone,
+            defaults={
+                "name": customer_data.get("name"),
+                "email": customer_data.get("email"),
+            }
+        )
+
+        if not created:
+            customer.name = customer_data.get("name", customer.name)
+            customer.email = customer_data.get("email", customer.email)
+            customer.save()
+
+        return EggSale.objects.create(customer=customer, **validated_data)
