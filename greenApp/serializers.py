@@ -231,7 +231,8 @@ class MortalityRecordSerializer(serializers.ModelSerializer):
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customers
-        fields = ['id', 'name', 'phone', 'email']
+        fields = ['id', 'name', 'phone', 'email', 'added_on']
+        read_only_fields = ['added_on']
 
 
 class MilkSaleSerializer(serializers.ModelSerializer):

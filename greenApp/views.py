@@ -22,14 +22,14 @@ from greenProject import settings
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, \
     LeaveRequest, Salary, SalaryPayment, DairyCattle, MilkCollection, MapDrawing, CalvingRecord, Medication, \
     PoultryBatch, EggCollection, DairyGoat, GoatMilkCollection, KiddingRecord, MortalityRecord, MilkSale, GoatMilkSale, \
-    EggSale
+    EggSale, Customers
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
     NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
     SalaryDetailSerializer, SalaryPaymentSerializer, DairyCattleSerializer, MilkCollectionSerializer, \
     MapDrawingSerializer, CalvingRecordSerializer, MedicationSerializer, PoultryRecordSerializer, \
     EggCollectionSerializer, DairyGoatSerializer, GoatMilkCollectionSerializer, KiddingRecordSerializer, \
-    MortalityRecordSerializer, MilkSaleSerializer, GoatMilkSaleSerializer, EggSaleSerializer
+    MortalityRecordSerializer, MilkSaleSerializer, GoatMilkSaleSerializer, EggSaleSerializer, CustomerSerializer
 
 
 # Create your views here.
@@ -3383,3 +3383,178 @@ class EggSaleViewSet(viewsets.ViewSet):
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
 
+
+# Customers Records
+class CustomerViewSet(viewsets.ViewSet):
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'destroy': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action['default']
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def list(self, request):
+        try:
+            customers = Customers.objects.all().order_by('-id')
+            serializer = CustomerSerializer(customers, many=True)
+
+            return Response({
+                "error": False,
+                "message": "Customers List",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request):
+        try:
+            serializer = CustomerSerializer(data=request.data)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Customer Created Successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response({
+                "error": True,
+                "message": "Validation Failed",
+                "data": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, pk=None):
+        try:
+            customer = get_object_or_404(Customers, pk=pk)
+            serializer = CustomerSerializer(customer,   context={"request": request})
+
+            serializer_data = serializer.data
+
+            # Access all milk sales of current customer
+            milksale_details = MilkSale.objects.filter(customer=serializer_data["id"]).order_by('-id')
+            milksale_details_serializer = MilkSaleSerializer(milksale_details, many=True)
+            serializer_data["milksale"] = milksale_details_serializer.data
+
+            # Access all goat milk sales of current customer
+            goat_milksale = GoatMilkSale.objects.filter(customer=serializer_data["id"]).order_by('-id')
+            goat_milksale_serializer = GoatMilkSaleSerializer(goat_milksale, many=True)
+            serializer_data["goatmilksale"] = goat_milksale_serializer.data
+
+            # Access all goat milk sales of current customer
+            egg_sale = EggSale.objects.filter(customer=serializer_data["id"]).order_by('-id')
+            egg_sale_serializer = EggSaleSerializer(egg_sale, many=True)
+            serializer_data["eggsale"] = egg_sale_serializer.data
+
+            return Response({
+                "error": False,
+                "message": "Customer Retrieved",
+                "data": serializer_data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "Unable to retrieve customer",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        try:
+            customer = get_object_or_404(Customers, pk=pk)
+            serializer = CustomerSerializer(customer, data=request.data)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Customer Updated Successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "error": True,
+                "message": "Validation Failed",
+                "data": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "Unable to update customer",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def partial_update(self, request, pk=None):
+        try:
+            customer = get_object_or_404(Customers, pk=pk)
+            serializer = CustomerSerializer(customer, data=request.data, partial=True)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Customer Partially Updated Successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "error": True,
+                "message": "Validation Failed",
+                "data": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "Unable to partially update customer",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        try:
+            customer = get_object_or_404(Customers, pk=pk)
+            customer.delete()
+
+            return Response({
+                "error": False,
+                "message": "Customer Deleted Successfully",
+                "data": []
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "Unable to delete customer",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
