@@ -4,7 +4,7 @@ from rest_framework.exceptions import ValidationError
 
 from greenApp.models import TeamRoles, Farm, NotificationPreference, Notification, TeamMember, LeaveRequest, Salary, \
     SalaryPayment, DairyCattle, MilkCollection, MapDrawing, PoultryBatch, CalvingRecord, Medication, EggCollection, \
-    GoatMilkCollection, DairyGoat, KiddingRecord, MortalityRecord, MilkSale, Customers, GoatMilkSale, EggSale
+    GoatMilkCollection, DairyGoat, KiddingRecord, MortalityRecord, MilkSale, Customers, GoatMilkSale, EggSale, Orders
 
 User = get_user_model()
 
@@ -278,7 +278,20 @@ class MilkSaleSerializer(serializers.ModelSerializer):
             customer.email = customer_data.get("email", customer.email)
             customer.save()
 
-        return MilkSale.objects.create(customer=customer, **validated_data)
+        sale = MilkSale.objects.create(customer=customer, **validated_data)
+
+        # ALWAYS create the matching order
+        Orders.objects.create(
+            customer=customer,
+            product_type="cow_milk",
+            quantity=sale.quantity,
+            unit_price=sale.price_per_liter,
+            total_amount=sale.total_amount,
+            status=sale.status,
+            notes=sale.notes
+        )
+
+        return sale
 
 
 class GoatMilkSaleSerializer(serializers.ModelSerializer):
@@ -319,12 +332,27 @@ class GoatMilkSaleSerializer(serializers.ModelSerializer):
             }
         )
 
+        # Update existing customer if needed
         if not created:
             customer.name = customer_data.get("name", customer.name)
             customer.email = customer_data.get("email", customer.email)
             customer.save()
 
-        return GoatMilkSale.objects.create(customer=customer, **validated_data)
+        # ALWAYS create the sale
+        sale = GoatMilkSale.objects.create(customer=customer, **validated_data)
+
+        # ALWAYS create the matching order
+        Orders.objects.create(
+            customer=customer,
+            product_type="goat_milk",
+            quantity=sale.quantity,
+            unit_price=sale.price_per_liter,
+            total_amount=sale.total_amount,
+            status=sale.status,
+            notes=sale.notes
+        )
+
+        return sale
 
 
 class EggSaleSerializer(serializers.ModelSerializer):
@@ -370,4 +398,29 @@ class EggSaleSerializer(serializers.ModelSerializer):
             customer.email = customer_data.get("email", customer.email)
             customer.save()
 
-        return EggSale.objects.create(customer=customer, **validated_data)
+        sale = EggSale.objects.create(customer=customer, **validated_data)
+
+        # ALWAYS create the matching order
+        Orders.objects.create(
+            customer=customer,
+            product_type="eggs",
+            quantity=sale.trays,
+            unit_price=sale.price_per_tray,
+            total_amount=sale.total_amount,
+            status=sale.status,
+            notes=sale.notes
+        )
+
+        return sale
+
+
+class OrdersSerializer(serializers.ModelSerializer):
+    customer_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Orders
+        fields = "__all__"
+
+    def get_customer_name(self, obj):
+        # Return the TeamMember's name
+        return obj.customer.name

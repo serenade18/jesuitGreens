@@ -687,3 +687,45 @@ class EggSale(models.Model):
     def __str__(self):
         return f"Sale #{self.id} - {self.customer.name}"
 
+
+# All Orders
+class Orders(models.Model):
+    PRODUCT_TYPES = [
+        ("cow_milk", "Cow Milk"),
+        ("goat_milk", "Goat Milk"),
+        ("eggs", "Eggs"),
+    ]
+
+    STATUS = [
+        ("paid", "Paid"),
+        ("pending", "Pending"),
+        ("partial", "Partial"),
+    ]
+
+    CATEGORY = [
+        ("livestock", "Livestock"),
+        ("dairy", "Dairy"),
+        ("poultry", "Poultry"),
+        ("crop", "Crop"),
+        ("fish", "Fish"),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    customer = models.ForeignKey(
+        Customers,
+        on_delete=models.CASCADE,
+        related_name="orders"
+    )
+    product_type = models.CharField(max_length=20, choices=PRODUCT_TYPES)
+    category = models.CharField(max_length=20, choices=CATEGORY, null=True, blank=True)
+    quantity = models.FloatField(null=True, blank=True)
+    unit_price = models.FloatField(null=True, blank=True)
+    total_amount = models.FloatField()
+    status = models.CharField(max_length=20, choices=STATUS)
+    notes = models.TextField(null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.product_type} sale #{self.id} - {self.customer.name}"
+
