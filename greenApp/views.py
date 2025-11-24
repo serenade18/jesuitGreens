@@ -2,10 +2,12 @@ import jwt
 from datetime import datetime, timedelta
 
 from django.contrib.auth.hashers import make_password, check_password
+from django.db.models.functions import TruncMonth
 from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.exceptions import ValidationError, PermissionDenied, AuthenticationFailed
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -17,12 +19,14 @@ from jwt import ExpiredSignatureError, InvalidTokenError
 from django.utils.dateparse import parse_date
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from django.db.models import Sum, Avg
+from collections import defaultdict
 
 from greenProject import settings
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, \
     LeaveRequest, Salary, SalaryPayment, DairyCattle, MilkCollection, MapDrawing, CalvingRecord, Medication, \
     PoultryBatch, EggCollection, DairyGoat, GoatMilkCollection, KiddingRecord, MortalityRecord, MilkSale, GoatMilkSale, \
-    EggSale, Customers, Orders
+    EggSale, Customers, Orders, Expense, RecurringExpense
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
     NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
@@ -30,7 +34,7 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     MapDrawingSerializer, CalvingRecordSerializer, MedicationSerializer, PoultryRecordSerializer, \
     EggCollectionSerializer, DairyGoatSerializer, GoatMilkCollectionSerializer, KiddingRecordSerializer, \
     MortalityRecordSerializer, MilkSaleSerializer, GoatMilkSaleSerializer, EggSaleSerializer, CustomerSerializer, \
-    OrdersSerializer
+    OrdersSerializer, ExpenseSerializer, RecurringExpenseSerializer
 
 
 # Create your views here.
@@ -3551,6 +3555,13 @@ class CustomerViewSet(viewsets.ViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
+# Orders pagination
+class OrdersPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
 # Orders Viewset
 class OrdersViewSet(viewsets.ViewSet):
     permission_classes_by_action = {
@@ -3580,14 +3591,49 @@ class OrdersViewSet(viewsets.ViewSet):
 
     def list(self, request):
         try:
-            orders = Orders.objects.all().order_by('-id')
-            serializer = OrdersSerializer(orders, many=True)
+            # Pagination setup
+            paginator = OrdersPagination()
+            orders_qs = Orders.objects.select_related("customer").all().order_by('-id')
+            paginated_orders = paginator.paginate_queryset(orders_qs, request)
 
-            return Response({
+            serializer = OrdersSerializer(paginated_orders, many=True)
+
+            # Dashboard metrics
+            total_revenue = orders_qs.aggregate(total=Sum('total_amount'))['total'] or 0
+            avg_transaction = orders_qs.aggregate(avg=Avg('total_amount'))['avg'] or 0
+            total_transactions = orders_qs.count()
+
+            # Revenue by category
+            category_data = orders_qs.values('category').annotate(total=Sum('total_amount')).order_by('-total')
+            category_revenue = [{"name": c['category'].capitalize(), "value": c['total']} for c in category_data]
+
+            # Top category
+            if category_revenue:
+                top_category = category_revenue[0]['name']
+                top_category_amount = category_revenue[0]['value']
+            else:
+                top_category = None
+                top_category_amount = 0
+
+            # Revenue trend per month
+            trend_qs = orders_qs.annotate(month=TruncMonth('added_on')).values('month').annotate(
+                total=Sum('total_amount')).order_by('month')
+            trend = [{"month": t['month'].strftime("%b"), "total": t['total']} for t in trend_qs]
+
+            return paginator.get_paginated_response({
                 "error": False,
-                "message": "Orders List",
-                "data": serializer.data
-            }, status=status.HTTP_200_OK)
+                "message": "Dashboard Data",
+                "data": {
+                    "total_revenue": total_revenue,
+                    "avg_transaction": avg_transaction,
+                    "total_transactions": total_transactions,
+                    "top_category": top_category,
+                    "top_category_amount": top_category_amount,
+                    "category_revenue": category_revenue,
+                    "trend": trend,
+                    "orders": serializer.data
+                }
+            })
 
         except Exception as e:
             return Response({
@@ -3730,3 +3776,210 @@ class OrdersViewSet(viewsets.ViewSet):
                 "message": "An Error Occurred",
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Expense ViewSet
+class ExpenseViewSet(viewsets.ViewSet):
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'destroy': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action['default']
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def list(self, request):
+        try:
+            expenses = Expense.objects.all().order_by('-id')
+            serializer = ExpenseSerializer(expenses, many=True)
+            return Response({
+                "error": False,
+                "message": "Expenses List",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": True, "message": "An error occurred", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request):
+        try:
+            serializer = ExpenseSerializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Expense Created Successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+            return Response({"error": True, "message": "Validation failed", "data": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": True, "message": "An error occurred", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, pk=None):
+        try:
+            expense = get_object_or_404(Expense, pk=pk)
+            serializer = ExpenseSerializer(expense)
+            return Response({"error": False, "message": "Expense Retrieved", "data": serializer.data}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": True, "message": "Unable to retrieve expense", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        try:
+            expense = get_object_or_404(Expense, pk=pk)
+            serializer = ExpenseSerializer(expense, data=request.data, context={'request': request})
+            if serializer.is_valid():
+                serializer.save()
+                return Response({"error": False, "message": "Expense Updated Successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+            return Response({"error": True, "message": "Validation failed", "data": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": True, "message": "Unable to update expense", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def partial_update(self, request, pk=None):
+        try:
+            expense = get_object_or_404(Expense, pk=pk)
+            serializer = ExpenseSerializer(expense, data=request.data, partial=True, context={'request': request})
+            if serializer.is_valid():
+                serializer.save()
+                return Response({"error": False, "message": "Expense Partially Updated Successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+            return Response({"error": True, "message": "Validation failed", "data": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": True, "message": "Unable to partially update expense", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        try:
+            expense = get_object_or_404(Expense, pk=pk)
+            expense.delete()
+            return Response({"error": False, "message": "Expense Deleted Successfully", "data": []}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": True, "message": "Unable to delete expense", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# --- Recurring Expense ViewSet ---
+class RecurringExpenseViewSet(viewsets.ViewSet):
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'destroy': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action['default']
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def list(self, request):
+        try:
+            recurring = RecurringExpense.objects.all().order_by('-id')
+            serializer = RecurringExpenseSerializer(recurring, many=True)
+            return Response({"error": False, "message": "Recurring Expenses List", "data": serializer.data}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": True, "message": "An error occurred", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request):
+        try:
+            serializer = RecurringExpenseSerializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                recurring = serializer.save()
+
+                # Automatically generate the first expense for this recurring template
+                recurring.generate_expense()  # Amount will default to estimated_amount or 0
+
+                return Response({"error": False, "message": "Recurring Expense Created Successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
+            return Response({"error": True, "message": "Validation failed", "data": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": True, "message": "An error occurred", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, pk=None):
+        try:
+            recurring = get_object_or_404(RecurringExpense, pk=pk)
+            serializer = RecurringExpenseSerializer(recurring)
+
+            # Include generated expenses
+            generated = Expense.objects.filter(recurring_expense=recurring.id).order_by('-id')
+            generated_serializer = ExpenseSerializer(generated, many=True)
+            data = serializer.data
+            data["generated_expenses"] = generated_serializer.data
+
+            return Response({"error": False, "message": "Recurring Expense Retrieved", "data": data}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": True, "message": "Unable to retrieve recurring expense", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        try:
+            recurring = get_object_or_404(RecurringExpense, pk=pk)
+            serializer = RecurringExpenseSerializer(recurring, data=request.data, context={'request': request})
+            if serializer.is_valid():
+                updated = serializer.save()
+
+                # Update pending future expenses if any
+                Expense.objects.filter(recurring_expense=recurring, status='pending').update(
+                    provider_name=updated.provider_name,
+                    account_number=updated.account_number
+                )
+
+                return Response({"error": False, "message": "Recurring Expense Updated Successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+            return Response({"error": True, "message": "Validation failed", "data": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": True, "message": "Unable to update recurring expense", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def partial_update(self, request, pk=None):
+        try:
+            recurring = get_object_or_404(RecurringExpense, pk=pk)
+            serializer = RecurringExpenseSerializer(recurring, data=request.data, partial=True, context={'request': request})
+            if serializer.is_valid():
+                updated = serializer.save()
+                Expense.objects.filter(recurring_expense=recurring, status='pending').update(
+                    provider_name=updated.provider_name,
+                    account_number=updated.account_number
+                )
+                return Response({"error": False, "message": "Recurring Expense Partially Updated Successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+            return Response({"error": True, "message": "Validation failed", "data": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": True, "message": "Unable to partially update recurring expense", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        try:
+            recurring = get_object_or_404(RecurringExpense, pk=pk)
+            recurring.delete()
+            return Response({"error": False, "message": "Recurring Expense Deleted Successfully", "data": []}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": True, "message": "Unable to delete recurring expense", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'])
+    def generate_due(self, request):
+        """Generate all due expenses for the current user"""
+        count = RecurringExpense.generate_all_due_expenses(user=request.user)
+        return Response({
+            'count': count,
+            'message': f'Generated {count} due expenses'
+        }, status=status.HTTP_200_OK)

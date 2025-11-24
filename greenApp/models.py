@@ -729,3 +729,76 @@ class Orders(models.Model):
     def __str__(self):
         return f"{self.product_type} sale #{self.id} - {self.customer.name}"
 
+
+# Expenses Model
+class Expense(models.Model):
+    EXPENSE_TYPES = [
+        ("electricity", "Electricity"),
+        ("water", "Water"),
+        ("other", "Other"),
+    ]
+
+    STATUS = [
+        ("pending", "Pending"),
+        ("paid", "Paid"),
+        ("overdue", "Overdue"),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    expense_type = models.CharField(max_length=20, choices=EXPENSE_TYPES)
+    amount = models.FloatField()
+    billing_period_start = models.DateField(null=True, blank=True)
+    billing_period_end = models.DateField(null=True, blank=True)
+    due_date = models.DateField()
+    paid_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS, default="pending")
+    provider_name = models.CharField(max_length=255)
+    account_number = models.CharField(max_length=100, null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+    receipt_url = models.URLField(null=True, blank=True)
+    recurring_expense = models.ForeignKey(
+        "RecurringExpense",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="expenses"
+    )
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.provider_name} ({self.expense_type}) - {self.amount} KES"
+
+
+# Recurring Expense
+class RecurringExpense(models.Model):
+    EXPENSE_TYPES = [
+        ("electricity", "Electricity"),
+        ("water", "Water"),
+        ("other", "Other"),
+    ]
+
+    FREQUENCIES = [
+        ("monthly", "Monthly"),
+        ("quarterly", "Quarterly"),
+        ("yearly", "Yearly"),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    expense_type = models.CharField(max_length=20, choices=EXPENSE_TYPES)
+    estimated_amount = models.FloatField(null=True, blank=True)
+    frequency = models.CharField(max_length=20, choices=FREQUENCIES, default="monthly")
+    day_of_month = models.IntegerField()
+    provider_name = models.CharField(max_length=255)
+    account_number = models.CharField(max_length=100, null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    next_due_date = models.DateField(null=True, blank=True)
+    last_generated_date = models.DateField(null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.provider_name} ({self.frequency})"
+
