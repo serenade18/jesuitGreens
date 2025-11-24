@@ -5,6 +5,7 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.db.models.functions import TruncMonth
 from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
+from django.utils.timezone import now
 from rest_framework import viewsets, status
 from rest_framework.exceptions import ValidationError, PermissionDenied, AuthenticationFailed
 from rest_framework.pagination import PageNumberPagination
@@ -26,7 +27,7 @@ from greenProject import settings
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, \
     LeaveRequest, Salary, SalaryPayment, DairyCattle, MilkCollection, MapDrawing, CalvingRecord, Medication, \
     PoultryBatch, EggCollection, DairyGoat, GoatMilkCollection, KiddingRecord, MortalityRecord, MilkSale, GoatMilkSale, \
-    EggSale, Customers, Orders, Expense, RecurringExpense
+    EggSale, Customers, Orders, Expense, RecurringExpense, Tasks
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
     NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
@@ -34,7 +35,7 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     MapDrawingSerializer, CalvingRecordSerializer, MedicationSerializer, PoultryRecordSerializer, \
     EggCollectionSerializer, DairyGoatSerializer, GoatMilkCollectionSerializer, KiddingRecordSerializer, \
     MortalityRecordSerializer, MilkSaleSerializer, GoatMilkSaleSerializer, EggSaleSerializer, CustomerSerializer, \
-    OrdersSerializer, ExpenseSerializer, RecurringExpenseSerializer
+    OrdersSerializer, ExpenseSerializer, RecurringExpenseSerializer, TaskSerializer
 
 
 # Create your views here.
@@ -3870,7 +3871,7 @@ class ExpenseViewSet(viewsets.ViewSet):
             return Response({"error": True, "message": "Unable to delete expense", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-# --- Recurring Expense ViewSet ---
+# Recurring Expense ViewSet
 class RecurringExpenseViewSet(viewsets.ViewSet):
     permission_classes_by_action = {
         'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
@@ -3983,3 +3984,170 @@ class RecurringExpenseViewSet(viewsets.ViewSet):
             'count': count,
             'message': f'Generated {count} due expenses'
         }, status=status.HTTP_200_OK)
+
+
+# Dashboard summary
+class DashboardViewSet(viewsets.ViewSet):
+
+    permission_classes_by_action = {
+        'list': [IsAuthenticated],
+        'default': [IsAuthenticated]
+    }
+
+    def get_permissions(self):
+        return [permission() for permission in self.permission_classes_by_action.get(
+            self.action, self.permission_classes_by_action['default']
+        )]
+
+    def list(self, request):
+        today = now().date()
+
+        milk_total = MilkCollection.objects.filter(
+            added_on__date=today
+        ).aggregate(total=Sum('quantity'))['total'] or 0
+
+        goatmilk_total = GoatMilkCollection.objects.filter(
+            added_on__date=today
+        ).aggregate(total=Sum('quantity'))['total'] or 0
+
+        egg_total = EggCollection.objects.filter(
+            added_on__date=today
+        ).aggregate(total=Sum('total_eggs'))['total'] or 0
+
+        # If you don’t have vegetable or fish models yet:
+        vegetables_total = 0
+        fish_total = 0
+        milk = milk_total + goatmilk_total
+
+        dict_response = {
+            "error": False,
+            "message": "Home page data",
+            "milk": milk,
+            "eggs": egg_total,
+            "vegetables": vegetables_total,
+            "fish": fish_total,
+        }
+
+        return Response(dict_response)
+
+
+# Tasks viewsets
+class TaskViewSet(viewsets.ViewSet):
+    permission_classes_by_action = {
+        'create': [IsAuthenticated],
+        'list': [IsAuthenticated],
+        'retrieve': [IsAuthenticated],
+        'update': [IsAuthenticated],
+        'partial_update': [IsAuthenticated],
+        'destroy': [IsAuthenticated],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        return [permission() for permission in self.permission_classes_by_action.get(
+            self.action, self.permission_classes_by_action['default']
+        )]
+
+    def list(self, request):
+        tasks = Tasks.objects.all().order_by("-added_on")
+        serializer = TaskSerializer(tasks, many=True)
+        return Response({
+            "error": False,
+            "message": "Tasks retrieved successfully",
+            "data": serializer.data
+        })
+
+    def retrieve(self, request, pk=None):
+        try:
+            task = Tasks.objects.get(pk=pk)
+            serializer = TaskSerializer(task)
+            return Response({
+                "error": False,
+                "message": "Task retrieved successfully",
+                "data": serializer.data
+            })
+        except Tasks.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Task not found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    def create(self, request):
+        serializer = TaskSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Task created successfully",
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED)
+        return Response({
+            "error": True,
+            "message": "Failed to create task",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        try:
+            task = Tasks.objects.get(pk=pk)
+        except Tasks.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Task not found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = TaskSerializer(task, data=request.data, partial=False)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Task updated successfully",
+                "data": serializer.data
+            })
+        return Response({
+            "error": True,
+            "message": "Failed to update task",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def partial_update(self, request, pk=None):
+        try:
+            task = Tasks.objects.get(pk=pk)
+        except Tasks.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Task not found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = TaskSerializer(task, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Task partially updated successfully",
+                "data": serializer.data
+            })
+        return Response({
+            "error": True,
+            "message": "Failed to update task",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        try:
+            task = Tasks.objects.get(pk=pk)
+            task.delete()
+            return Response({
+                "error": False,
+                "message": "Task deleted successfully",
+                "data": None
+            })
+        except Tasks.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Task not found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)

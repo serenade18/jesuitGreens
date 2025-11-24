@@ -10,7 +10,8 @@ from greenApp.views import UserViewSet, UserInfoView, ChangePasswordView, TeamRo
     LeaveRequestViewSet, SalaryViewSet, SalaryPaymentViewSet, DairyCattleViewSet, MilkCollectionViewSet, \
     MapDrawingViewSet, CalvingRecordViewSet, MedicationViewSet, PoultryRecordViewSet, EggCollectionViewSet, \
     DairyGoatViewSet, GoatMilkCollectionViewSet, KiddingRecordViewSet, MortalityRecordViewSet, MilkSaleViewSet, \
-    GoatMilkSaleViewSet, EggSaleViewSet, CustomerViewSet, OrdersViewSet, ExpenseViewSet, RecurringExpenseViewSet
+    GoatMilkSaleViewSet, EggSaleViewSet, CustomerViewSet, OrdersViewSet, ExpenseViewSet, RecurringExpenseViewSet, \
+    DashboardViewSet, TaskViewSet
 
 router = routers.DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -40,6 +41,8 @@ router.register(r"customers", CustomerViewSet, basename="customers")
 router.register(r"orders", OrdersViewSet, basename="orders")
 router.register(r'expenses', ExpenseViewSet, basename='expense')
 router.register(r'recurring-expenses', RecurringExpenseViewSet, basename='recurring-expense')
+router.register(r'dashboard', DashboardViewSet, basename='dashboard')
+router.register(r'tasks', TaskViewSet, basename='tasks')
 
 
 urlpatterns = [

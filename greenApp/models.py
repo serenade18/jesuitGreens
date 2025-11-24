@@ -252,12 +252,15 @@ class DairyCattle(models.Model):
     ]
 
     BREED_CHOICES = [
-        ("alpine", "Alpine"),
-        ("saanen", "Saanen"),
-        ("toggenburg", "Toggenburg"),
-        ("anglo-nubian", "Anglo-Nubian"),
-        ("galla", "Galla"),
-        ("seag", "Seag")
+        ("ayshire", "Ayshire"),
+        ("boran", "Boran"),
+        ("brown swiss", "Brown Swiss"),
+        ("fleckvieh", "Fleckvieh"),
+        ("gurnsey", "Gurnsey"),
+        ("jersey", "Jersey"),
+        ("sahiwal", "Sahiwal"),
+        ("red friesian", "Red Friesian"),
+        ("holstein friesian", "Holstein Friesian"),
     ]
 
     CATEGORY_CHOICES = [
@@ -801,4 +804,30 @@ class RecurringExpense(models.Model):
 
     def __str__(self):
         return f"{self.provider_name} ({self.frequency})"
+
+
+# Tasks model
+class Tasks(models.Model):
+    PRIORITY = [
+        ("low", "Low"),
+        ("medium", "Medium"),
+        ("high", "High"),
+    ]
+
+    STATUS = [
+        ("pending", "Pending"),
+        ("in_progress", "In Progress"),
+        ("completed", "Completed"),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    due_date = models.DateField()
+    priority = models.CharField(max_length=10, choices=PRIORITY, default="medium")
+    status = models.CharField(max_length=15, choices=STATUS, default="pending")
+    added_on = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.title} ({self.status})"
 
