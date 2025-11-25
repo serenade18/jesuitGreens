@@ -27,7 +27,7 @@ from greenProject import settings
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, \
     LeaveRequest, Salary, SalaryPayment, DairyCattle, MilkCollection, MapDrawing, CalvingRecord, Medication, \
     PoultryBatch, EggCollection, DairyGoat, GoatMilkCollection, KiddingRecord, MortalityRecord, MilkSale, GoatMilkSale, \
-    EggSale, Customers, Orders, Expense, RecurringExpense, Tasks, BillPayment
+    EggSale, Customers, Orders, Expense, RecurringExpense, Tasks, BillPayment, Procurement
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
     NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
@@ -35,7 +35,8 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     MapDrawingSerializer, CalvingRecordSerializer, MedicationSerializer, PoultryRecordSerializer, \
     EggCollectionSerializer, DairyGoatSerializer, GoatMilkCollectionSerializer, KiddingRecordSerializer, \
     MortalityRecordSerializer, MilkSaleSerializer, GoatMilkSaleSerializer, EggSaleSerializer, CustomerSerializer, \
-    OrdersSerializer, ExpenseSerializer, RecurringExpenseSerializer, TaskSerializer, BillPaymentSerializer
+    OrdersSerializer, ExpenseSerializer, RecurringExpenseSerializer, TaskSerializer, BillPaymentSerializer, \
+    ProcurementSerializer
 
 
 # Create your views here.
@@ -3563,7 +3564,7 @@ class OrdersPagination(PageNumberPagination):
     max_page_size = 100
 
 
-# Orders Viewset
+# Orders ViewSet
 class OrdersViewSet(viewsets.ViewSet):
     permission_classes_by_action = {
         'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
@@ -4028,7 +4029,7 @@ class DashboardViewSet(viewsets.ViewSet):
         return Response(dict_response)
 
 
-# Tasks viewsets
+# Tasks viewSets
 class TaskViewSet(viewsets.ViewSet):
     permission_classes_by_action = {
         'create': [IsAuthenticated],
@@ -4150,7 +4151,7 @@ class TaskViewSet(viewsets.ViewSet):
             }, status=status.HTTP_404_NOT_FOUND)
 
 
-# Bill payment viewset
+# Bill payment viewSet
 class BillPaymentViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
 
@@ -4270,3 +4271,126 @@ class BillPaymentViewSet(viewsets.ViewSet):
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
 
+
+# Procurement viewSet
+class ProcurementViewSet(viewsets.ModelViewSet):
+    queryset = Procurement.objects.all().order_by("-purchase_date")
+    serializer_class = ProcurementSerializer
+
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'destroy': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action['default']
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+
+        return Response({
+            "error": False,
+            "message": "Procurement records retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+
+        if serializer.is_valid():
+            procurement = serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Procurement record created successfully",
+                "data": self.get_serializer(procurement).data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, *args, **kwargs):
+        try:
+            procurement = self.get_object()
+            serializer = self.get_serializer(procurement)
+
+            return Response({
+                "error": False,
+                "message": "Procurement record retrieved successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Procurement.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Procurement record not found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+
+        try:
+            procurement = self.get_object()
+        except Procurement.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Procurement record not found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = self.get_serializer(procurement, data=request.data, partial=partial)
+
+        if serializer.is_valid():
+            procurement = serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Procurement record updated successfully",
+                "data": self.get_serializer(procurement).data
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            procurement = self.get_object()
+        except Procurement.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Procurement record not found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        procurement.delete()
+
+        return Response({
+            "error": False,
+            "message": "Procurement record deleted successfully",
+            "data": None
+        }, status=status.HTTP_200_OK)

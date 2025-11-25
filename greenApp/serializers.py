@@ -9,7 +9,7 @@ from rest_framework.exceptions import ValidationError
 from greenApp.models import TeamRoles, Farm, NotificationPreference, Notification, TeamMember, LeaveRequest, Salary, \
     SalaryPayment, DairyCattle, MilkCollection, MapDrawing, PoultryBatch, CalvingRecord, Medication, EggCollection, \
     GoatMilkCollection, DairyGoat, KiddingRecord, MortalityRecord, MilkSale, Customers, GoatMilkSale, EggSale, Orders, \
-    Expense, RecurringExpense, Tasks, BillPayment
+    Expense, RecurringExpense, Tasks, BillPayment, Procurement
 
 User = get_user_model()
 
@@ -455,4 +455,10 @@ class TaskSerializer(serializers.ModelSerializer):
 class BillPaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = BillPayment
+        fields = "__all__"
+
+
+class ProcurementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Procurement
         fields = "__all__"

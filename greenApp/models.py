@@ -837,3 +837,31 @@ class BillPayment(models.Model):
 
     def __str__(self):
         return f"{self.bill_id} - {self.amount} KES"
+
+
+# Procurement model
+class Procurement(models.Model):
+    CATEGORY_CHOICES = [
+        ("Feed", "Feed"),
+        ("Vaccine", "Vaccine"),
+        ("Fertilizer", "Fertilizer"),
+        ("Seeds", "Seeds"),
+        ("Animal", "Animal"),
+        ("Equipment", "Equipment"),
+        ("Other", "Other"),
+    ]
+
+    item = models.CharField(max_length=255)
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
+    quantity = models.FloatField()
+    unit_cost = models.FloatField()
+    supplier = models.CharField(max_length=255)
+    purchase_date = models.DateField()
+    total_cost = models.FloatField()
+    notes = models.TextField(null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    updated_on = models.DateTimeField(auto_now=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.item} - {self.supplier}"
