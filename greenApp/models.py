@@ -865,3 +865,21 @@ class Procurement(models.Model):
 
     def __str__(self):
         return f"{self.item} - {self.supplier}"
+
+
+# Inventory model
+class Inventory(models.Model):
+    id = models.AutoField(primary_key=True)
+    item = models.CharField(max_length=255)
+    category = models.CharField(max_length=255)
+    current_stock = models.FloatField()
+    min_threshold = models.FloatField()
+    unit = models.CharField(max_length=50)  # e.g. kg, pcs, bags
+    unit_cost = models.FloatField()
+    supplier = models.CharField(max_length=255)
+    added_on = models.DateTimeField(auto_now_add=True)
+    updated_on = models.DateTimeField(auto_now=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.item} ({self.current_stock} {self.unit})"

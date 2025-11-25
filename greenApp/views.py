@@ -2,6 +2,7 @@ import jwt
 from datetime import datetime, timedelta
 
 from django.contrib.auth.hashers import make_password, check_password
+from django.db import models
 from django.db.models.functions import TruncMonth
 from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
@@ -13,6 +14,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import action
+from rest_framework.viewsets import ModelViewSet
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -27,7 +29,7 @@ from greenProject import settings
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, \
     LeaveRequest, Salary, SalaryPayment, DairyCattle, MilkCollection, MapDrawing, CalvingRecord, Medication, \
     PoultryBatch, EggCollection, DairyGoat, GoatMilkCollection, KiddingRecord, MortalityRecord, MilkSale, GoatMilkSale, \
-    EggSale, Customers, Orders, Expense, RecurringExpense, Tasks, BillPayment, Procurement
+    EggSale, Customers, Orders, Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
     NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
@@ -36,7 +38,7 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     EggCollectionSerializer, DairyGoatSerializer, GoatMilkCollectionSerializer, KiddingRecordSerializer, \
     MortalityRecordSerializer, MilkSaleSerializer, GoatMilkSaleSerializer, EggSaleSerializer, CustomerSerializer, \
     OrdersSerializer, ExpenseSerializer, RecurringExpenseSerializer, TaskSerializer, BillPaymentSerializer, \
-    ProcurementSerializer
+    ProcurementSerializer, InventorySerializer
 
 
 # Create your views here.
@@ -4394,3 +4396,235 @@ class ProcurementViewSet(viewsets.ModelViewSet):
             "message": "Procurement record deleted successfully",
             "data": None
         }, status=status.HTTP_200_OK)
+
+
+# Inventory pagination
+class InventoryPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
+# Inventory viewSet
+class InventoryViewSet(viewsets.ViewSet):
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'destroy': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action['default']
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def list(self, request):
+        try:
+            paginator = InventoryPagination()
+
+            inventory_qs = Inventory.objects.all().order_by('-id')
+            paginated = paginator.paginate_queryset(inventory_qs, request)
+            serializer = InventorySerializer(paginated, many=True)
+
+            # Dashboard Metrics
+            total_stock_value = inventory_qs.aggregate(
+                value=Sum(models.F("current_stock") * models.F("unit_cost"))
+            )['value'] or 0
+
+            avg_unit_cost = inventory_qs.aggregate(
+                avg=Avg('unit_cost')
+            )['avg'] or 0
+
+            total_items = inventory_qs.count()
+
+            low_stock = inventory_qs.filter(
+                current_stock__lte=models.F("min_threshold")
+            ).count()
+
+            # Total value by category
+            category_summary = inventory_qs.values('category').annotate(
+                total_value=Sum(models.F("current_stock") * models.F("unit_cost"))
+            ).order_by('-total_value')
+
+            category_data = [
+                {"name": c['category'].capitalize(), "value": c['total_value']}
+                for c in category_summary
+            ]
+
+            # Monthly valuation trend
+            trend_qs = inventory_qs.annotate(
+                month=TruncMonth('updated_on')
+            ).values('month').annotate(
+                total=Sum(models.F("current_stock") * models.F("unit_cost"))
+            ).order_by('month')
+
+            trend = [
+                {"month": t["month"].strftime("%b"), "total": t['total']}
+                for t in trend_qs
+            ]
+
+            return paginator.get_paginated_response({
+                "error": False,
+                "message": "Inventory Dashboard Data",
+                "data": {
+                    "total_stock_value": total_stock_value,
+                    "avg_unit_cost": avg_unit_cost,
+                    "total_items": total_items,
+                    "low_stock": low_stock,
+                    "category_value": category_data,
+                    "trend": trend,
+                    "items": serializer.data
+                }
+            })
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request):
+        serializer = InventorySerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response({
+                "error": True,
+                "message": "Invalid inventory data",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        item = serializer.save()
+        return Response({
+            "error": False,
+            "message": "Inventory item created successfully",
+            "data": InventorySerializer(item).data
+        }, status=status.HTTP_201_CREATED)
+
+    def retrieve(self, request, pk=None):
+        try:
+            item = Inventory.objects.get(pk=pk)
+            serializer = InventorySerializer(item)
+
+            return Response({
+                "error": False,
+                "message": "Inventory item retrieved",
+                "data": serializer.data
+            })
+
+        except Inventory.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Item not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        try:
+            item = Inventory.objects.get(pk=pk)
+            serializer = InventorySerializer(item, data=request.data)
+
+            if not serializer.is_valid():
+                return Response({
+                    "error": True,
+                    "message": "Invalid update data",
+                    "details": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Inventory item updated successfully",
+                "data": serializer.data
+            })
+
+        except Inventory.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Item not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def partial_update(self, request, pk=None):
+        try:
+            item = Inventory.objects.get(pk=pk)
+            serializer = InventorySerializer(item, data=request.data, partial=True)
+
+            if not serializer.is_valid():
+                return Response({
+                    "error": True,
+                    "message": "Invalid update data",
+                    "details": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Inventory item updated successfully",
+                "data": serializer.data
+            })
+
+        except Inventory.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Item not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        try:
+            item = Inventory.objects.get(pk=pk)
+            item.delete()
+
+            return Response({
+                "error": False,
+                "message": "Inventory item deleted",
+                "data": []
+            })
+
+        except Inventory.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Item not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
