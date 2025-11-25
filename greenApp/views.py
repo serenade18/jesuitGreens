@@ -27,7 +27,7 @@ from greenProject import settings
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, \
     LeaveRequest, Salary, SalaryPayment, DairyCattle, MilkCollection, MapDrawing, CalvingRecord, Medication, \
     PoultryBatch, EggCollection, DairyGoat, GoatMilkCollection, KiddingRecord, MortalityRecord, MilkSale, GoatMilkSale, \
-    EggSale, Customers, Orders, Expense, RecurringExpense, Tasks
+    EggSale, Customers, Orders, Expense, RecurringExpense, Tasks, BillPayment
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
     NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
@@ -35,7 +35,7 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     MapDrawingSerializer, CalvingRecordSerializer, MedicationSerializer, PoultryRecordSerializer, \
     EggCollectionSerializer, DairyGoatSerializer, GoatMilkCollectionSerializer, KiddingRecordSerializer, \
     MortalityRecordSerializer, MilkSaleSerializer, GoatMilkSaleSerializer, EggSaleSerializer, CustomerSerializer, \
-    OrdersSerializer, ExpenseSerializer, RecurringExpenseSerializer, TaskSerializer
+    OrdersSerializer, ExpenseSerializer, RecurringExpenseSerializer, TaskSerializer, BillPaymentSerializer
 
 
 # Create your views here.
@@ -3910,10 +3910,7 @@ class RecurringExpenseViewSet(viewsets.ViewSet):
         try:
             serializer = RecurringExpenseSerializer(data=request.data, context={'request': request})
             if serializer.is_valid():
-                recurring = serializer.save()
-
-                # Automatically generate the first expense for this recurring template
-                recurring.generate_expense()  # Amount will default to estimated_amount or 0
+                serializer.save()
 
                 return Response({"error": False, "message": "Recurring Expense Created Successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
             return Response({"error": True, "message": "Validation failed", "data": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
@@ -4151,3 +4148,125 @@ class TaskViewSet(viewsets.ViewSet):
                 "message": "Task not found",
                 "data": None
             }, status=status.HTTP_404_NOT_FOUND)
+
+
+# Bill payment viewset
+class BillPaymentViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        try:
+            payments = BillPayment.objects.all().order_by('-payment_date')
+            serializer = BillPaymentSerializer(payments, many=True)
+            return Response({
+                "error": False,
+                "message": "Bill Payments List",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request):
+        try:
+            serializer = BillPaymentSerializer(data=request.data)
+            if serializer.is_valid():
+                payment = serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Bill Payment Created Successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+            return Response({
+                "error": True,
+                "message": "Validation failed",
+                "data": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, pk=None):
+        try:
+            payment = get_object_or_404(BillPayment, pk=pk)
+            serializer = BillPaymentSerializer(payment)
+            return Response({
+                "error": False,
+                "message": "Bill Payment Retrieved",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "Unable to retrieve bill payment",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        try:
+            payment = get_object_or_404(BillPayment, pk=pk)
+            serializer = BillPaymentSerializer(payment, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Bill Payment Updated Successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+            return Response({
+                "error": True,
+                "message": "Validation failed",
+                "data": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "Unable to update bill payment",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def partial_update(self, request, pk=None):
+        try:
+            payment = get_object_or_404(BillPayment, pk=pk)
+            serializer = BillPaymentSerializer(payment, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Bill Payment Partially Updated Successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+            return Response({
+                "error": True,
+                "message": "Validation failed",
+                "data": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "Unable to partially update bill payment",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        try:
+            payment = get_object_or_404(BillPayment, pk=pk)
+            payment.delete()
+            return Response({
+                "error": False,
+                "message": "Bill Payment Deleted Successfully",
+                "data": []
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "Unable to delete bill payment",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+

@@ -9,7 +9,7 @@ from rest_framework.exceptions import ValidationError
 from greenApp.models import TeamRoles, Farm, NotificationPreference, Notification, TeamMember, LeaveRequest, Salary, \
     SalaryPayment, DairyCattle, MilkCollection, MapDrawing, PoultryBatch, CalvingRecord, Medication, EggCollection, \
     GoatMilkCollection, DairyGoat, KiddingRecord, MortalityRecord, MilkSale, Customers, GoatMilkSale, EggSale, Orders, \
-    Expense, RecurringExpense, Tasks
+    Expense, RecurringExpense, Tasks, BillPayment
 
 User = get_user_model()
 
@@ -437,79 +437,13 @@ class OrdersSerializer(serializers.ModelSerializer):
 class RecurringExpenseSerializer(serializers.ModelSerializer):
     class Meta:
         model = RecurringExpense
-        fields = [
-            "id",
-            "expense_type",
-            "estimated_amount",
-            "frequency",
-            "day_of_month",
-            "provider_name",
-            "account_number",
-            "notes",
-            "is_active",
-            "next_due_date",
-            "last_generated_date",
-            "added_on",
-        ]
-
-    def create(self, validated_data):
-        # Calculate next_due_date if not provided
-        if not validated_data.get("next_due_date"):
-            today = date.today()
-            day_of_month = validated_data.get("day_of_month", today.day)
-            frequency = validated_data.get("frequency", "monthly")
-
-            if frequency == "monthly":
-                month = today.month + 1 if today.month < 12 else 1
-                year = today.year if today.month < 12 else today.year + 1
-            elif frequency == "quarterly":
-                month = today.month + 3
-                year = today.year
-                if month > 12:
-                    month -= 12
-                    year += 1
-            elif frequency == "yearly":
-                month = today.month
-                year = today.year + 1
-            else:
-                month = today.month
-                year = today.year
-
-            last_day = calendar.monthrange(year, month)[1]
-            validated_data["next_due_date"] = date(year, month, min(day_of_month, last_day))
-
-        return super().create(validated_data)
+        fields = "__all__"
 
 
 class ExpenseSerializer(serializers.ModelSerializer):
-    recurring_expense = RecurringExpenseSerializer(read_only=True)
-    recurring_expense_id = serializers.PrimaryKeyRelatedField(
-        queryset=RecurringExpense.objects.all(),
-        source="recurring_expense",
-        write_only=True,
-        required=False,
-        allow_null=True
-    )
-
     class Meta:
         model = Expense
-        fields = [
-            "id",
-            "expense_type",
-            "amount",
-            "billing_period_start",
-            "billing_period_end",
-            "due_date",
-            "paid_date",
-            "status",
-            "provider_name",
-            "account_number",
-            "notes",
-            "receipt_url",
-            "recurring_expense",
-            "recurring_expense_id",
-            "added_on",
-        ]
+        fields = "__all__"
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -517,3 +451,8 @@ class TaskSerializer(serializers.ModelSerializer):
         model = Tasks
         fields = "__all__"
 
+
+class BillPaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BillPayment
+        fields = "__all__"

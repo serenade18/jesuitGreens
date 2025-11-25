@@ -735,10 +735,12 @@ class Orders(models.Model):
 
 # Expenses Model
 class Expense(models.Model):
-    EXPENSE_TYPES = [
-        ("electricity", "Electricity"),
-        ("water", "Water"),
-        ("other", "Other"),
+    CATEGORY = [
+        ("repair", "Repair"),
+        ("vet", "Vet"),
+        ("transport", "Transport"),
+        ("construction", "Construction"),
+        ("maintenance", "Maintenance"),
     ]
 
     STATUS = [
@@ -748,24 +750,11 @@ class Expense(models.Model):
     ]
 
     id = models.AutoField(primary_key=True)
-    expense_type = models.CharField(max_length=20, choices=EXPENSE_TYPES)
+    category = models.CharField(max_length=20, choices=CATEGORY)
     amount = models.FloatField()
-    billing_period_start = models.DateField(null=True, blank=True)
-    billing_period_end = models.DateField(null=True, blank=True)
-    due_date = models.DateField()
-    paid_date = models.DateField(null=True, blank=True)
+    date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS, default="pending")
-    provider_name = models.CharField(max_length=255)
-    account_number = models.CharField(max_length=100, null=True, blank=True)
     notes = models.TextField(null=True, blank=True)
-    receipt_url = models.URLField(null=True, blank=True)
-    recurring_expense = models.ForeignKey(
-        "RecurringExpense",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="expenses"
-    )
     added_on = models.DateTimeField(auto_now_add=True)
     objects = models.Manager()
 
@@ -775,10 +764,9 @@ class Expense(models.Model):
 
 # Recurring Expense
 class RecurringExpense(models.Model):
-    EXPENSE_TYPES = [
-        ("electricity", "Electricity"),
-        ("water", "Water"),
-        ("other", "Other"),
+    CATEGORY = [
+        ("utility", "Utility"),
+        ("services", "Services"),
     ]
 
     FREQUENCIES = [
@@ -787,23 +775,24 @@ class RecurringExpense(models.Model):
         ("yearly", "Yearly"),
     ]
 
-    id = models.AutoField(primary_key=True)
-    expense_type = models.CharField(max_length=20, choices=EXPENSE_TYPES)
-    estimated_amount = models.FloatField(null=True, blank=True)
-    frequency = models.CharField(max_length=20, choices=FREQUENCIES, default="monthly")
-    day_of_month = models.IntegerField()
-    provider_name = models.CharField(max_length=255)
-    account_number = models.CharField(max_length=100, null=True, blank=True)
-    notes = models.TextField(null=True, blank=True)
-    is_active = models.BooleanField(default=True)
-    next_due_date = models.DateField(null=True, blank=True)
-    last_generated_date = models.DateField(null=True, blank=True)
-    added_on = models.DateTimeField(auto_now_add=True)
+    STATUS = [
+        ("pending", "Pending"),
+        ("paid", "Paid"),
+        ("overdue", "Overdue"),
+    ]
 
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=255)
+    category = models.CharField(max_length=20, choices=CATEGORY)
+    frequency = models.CharField(max_length=20, choices=FREQUENCIES, default="monthly")
+    notes = models.TextField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS, default="pending")
+    is_active = models.BooleanField(default=True)
+    added_on = models.DateTimeField(auto_now_add=True)
     objects = models.Manager()
 
     def __str__(self):
-        return f"{self.provider_name} ({self.frequency})"
+        return f"{self.name} ({self.frequency})"
 
 
 # Tasks model
@@ -831,3 +820,20 @@ class Tasks(models.Model):
     def __str__(self):
         return f"{self.title} ({self.status})"
 
+
+# Bill payment model
+class BillPayment(models.Model):
+    id = models.AutoField(primary_key=True)
+    bill_id = models.ForeignKey(
+        RecurringExpense,
+        on_delete=models.CASCADE,
+        related_name="bill_payments"
+    )
+    payment_date = models.DateField()
+    amount = models.FloatField()
+    notes = models.TextField(null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.bill_id} - {self.amount} KES"
