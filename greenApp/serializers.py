@@ -9,7 +9,7 @@ from rest_framework.exceptions import ValidationError
 from greenApp.models import TeamRoles, Farm, NotificationPreference, Notification, TeamMember, LeaveRequest, Salary, \
     SalaryPayment, DairyCattle, MilkCollection, MapDrawing, PoultryBatch, CalvingRecord, Medication, EggCollection, \
     GoatMilkCollection, DairyGoat, KiddingRecord, MortalityRecord, MilkSale, Customers, GoatMilkSale, EggSale, Orders, \
-    Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory
+    Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Payment
 
 User = get_user_model()
 
@@ -294,7 +294,8 @@ class MilkSaleSerializer(serializers.ModelSerializer):
             unit_price=sale.price_per_liter,
             total_amount=sale.total_amount,
             status=sale.status,
-            notes=sale.notes
+            notes=sale.notes,
+            milk_sale=sale
         )
 
         return sale
@@ -356,7 +357,8 @@ class GoatMilkSaleSerializer(serializers.ModelSerializer):
             unit_price=sale.price_per_liter,
             total_amount=sale.total_amount,
             status=sale.status,
-            notes=sale.notes
+            notes=sale.notes,
+            goatmilk_sale=sale
         )
 
         return sale
@@ -416,7 +418,8 @@ class EggSaleSerializer(serializers.ModelSerializer):
             unit_price=sale.price_per_tray,
             total_amount=sale.total_amount,
             status=sale.status,
-            notes=sale.notes
+            notes=sale.notes,
+            egg_sale=sale
         )
 
         return sale
@@ -468,3 +471,16 @@ class InventorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Inventory
         fields = "__all__"
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+    customer_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Payment
+        fields = "__all__"
+
+    def get_customer_name(self, obj):
+        # Return the TeamMember's name
+        return obj.customer.name
+

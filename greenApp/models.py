@@ -723,6 +723,9 @@ class Orders(models.Model):
     category = models.CharField(max_length=20, choices=CATEGORY, null=True, blank=True)
     quantity = models.FloatField(null=True, blank=True)
     unit_price = models.FloatField(null=True, blank=True)
+    egg_sale = models.ForeignKey(EggSale, on_delete=models.CASCADE, related_name="egg_sales", null=True, blank=True)
+    milk_sale = models.ForeignKey(MilkSale, on_delete=models.CASCADE, related_name="milk_sales", null=True, blank=True)
+    goatmilk_sale = models.ForeignKey(GoatMilkSale, on_delete=models.CASCADE, related_name="goatmilk_sales", null=True, blank=True)
     total_amount = models.FloatField()
     status = models.CharField(max_length=20, choices=STATUS)
     notes = models.TextField(null=True, blank=True)
@@ -883,3 +886,32 @@ class Inventory(models.Model):
 
     def __str__(self):
         return f"{self.item} ({self.current_stock} {self.unit})"
+
+
+# Payment model
+class Payment(models.Model):
+    STATUS = [
+        ("paid", "Paid"),
+        ("partial", "Partial"),
+        ("pending", "Pending"),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    order = models.ForeignKey(
+        'Orders',  # Link to your Orders model
+        on_delete=models.CASCADE,
+        related_name="payments"
+    )
+    customer = models.ForeignKey(
+        'Customers',
+        on_delete=models.CASCADE,
+        related_name="payments"
+    )
+    order_amount = models.FloatField()  # Total amount of the order
+    payment_amount = models.FloatField()  # How much was paid
+    status = models.CharField(max_length=20, choices=STATUS, default="pending")
+    payment_date = models.DateTimeField(auto_now_add=True)
+    notes = models.TextField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Payment #{self.id} for Order #{self.order.id} - Customer: {self.customer.name}"
