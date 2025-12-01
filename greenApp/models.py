@@ -753,10 +753,11 @@ class Expense(models.Model):
     ]
 
     id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=255, blank=True)
     category = models.CharField(max_length=20, choices=CATEGORY)
     amount = models.FloatField()
     date = models.DateField(null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS, default="pending")
+    status = models.CharField(max_length=20, choices=STATUS, default="paid")
     notes = models.TextField(null=True, blank=True)
     added_on = models.DateTimeField(auto_now_add=True)
     objects = models.Manager()
