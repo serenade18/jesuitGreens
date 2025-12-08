@@ -46,6 +46,7 @@ router.register(r'tasks', TaskViewSet, basename='tasks')
 router.register(r'bill-payments', BillPaymentViewSet, basename='bill-payments')
 router.register(r'procurement', ProcurementViewSet, basename='procurement')
 router.register(r'inventory', InventoryViewSet, basename='inventory')
+router.register(r'rabbit', InventoryViewSet, basename='rabbit')
 
 
 urlpatterns = [
