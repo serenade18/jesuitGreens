@@ -29,7 +29,7 @@ from greenProject import settings
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, \
     LeaveRequest, Salary, SalaryPayment, DairyCattle, MilkCollection, MapDrawing, CalvingRecord, Medication, \
     PoultryBatch, EggCollection, DairyGoat, GoatMilkCollection, KiddingRecord, MortalityRecord, MilkSale, GoatMilkSale, \
-    EggSale, Customers, Orders, Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory
+    EggSale, Customers, Orders, Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Rabbit
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
     NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
@@ -38,7 +38,7 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     EggCollectionSerializer, DairyGoatSerializer, GoatMilkCollectionSerializer, KiddingRecordSerializer, \
     MortalityRecordSerializer, MilkSaleSerializer, GoatMilkSaleSerializer, EggSaleSerializer, CustomerSerializer, \
     OrdersSerializer, ExpenseSerializer, RecurringExpenseSerializer, TaskSerializer, BillPaymentSerializer, \
-    ProcurementSerializer, InventorySerializer
+    ProcurementSerializer, InventorySerializer, RabbitSerializer
 
 
 # Create your views here.
@@ -4019,6 +4019,15 @@ class DashboardViewSet(viewsets.ViewSet):
         fish_total = 0
         milk = milk_total + goatmilk_total
 
+        total_sales = Orders.objects.aggregate(total=Sum("total_amount"))["total"] or 0
+        bills = Expense.objects.aggregate(total=Sum("amount"))["total"] or 0
+        expenses = BillPayment.objects.aggregate(total=Sum("amount"))["total"] or 0
+        procurement = Procurement.objects.aggregate(total=Sum("total_cost"))["total"] or 0
+
+        total_expense = bills + expenses
+        total_profit = (bills + expenses + procurement) - total_sales
+
+
         dict_response = {
             "error": False,
             "message": "Home page data",
@@ -4026,6 +4035,10 @@ class DashboardViewSet(viewsets.ViewSet):
             "eggs": egg_total,
             "vegetables": vegetables_total,
             "fish": fish_total,
+            "procurement": procurement,
+            "total_sales": total_sales,
+            "total_expense": total_expense,
+            "total_profit": total_profit,
         }
 
         return Response(dict_response)
@@ -4628,3 +4641,62 @@ class InventoryViewSet(viewsets.ViewSet):
                 "message": "An error occurred",
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Rabbit viewSet
+class RabbitViewSet(viewsets.ModelViewSet):
+    queryset = Rabbit.objects.all().order_by('-id')
+    serializer_class = RabbitSerializer
+    permission_classes = [IsAuthenticated]     # Override per action if needed
+
+    # ---- Filters, search, ordering ----
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['breed', 'category', 'animal_type']
+    search_fields = ['animal_name', 'breed', 'category']
+    ordering_fields = ['added_on', 'date_of_birth', 'animal_name']
+    # ---- Standard response wrapper ----
+    def response(self, error, message, data=None, status_code=status.HTTP_200_OK):
+        return Response({
+            "error": error,
+            "message": message,
+            "data": data
+        }, status=status_code)
+
+    def create(self, request, *args, **kwargs):
+        serializer = RabbitSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return self.response(False, "Rabbit added successfully", serializer.data, status.HTTP_201_CREATED)
+        return self.response(True, "Validation Error", serializer.errors, status.HTTP_400_BAD_REQUEST)
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = RabbitSerializer(queryset, many=True)
+        return self.response(False, "rabbit list fetched", serializer.data)
+
+    def retrieve(self, request, pk=None, *args, **kwargs):
+        rabbit = self.get_object()
+        serializer = RabbitSerializer(rabbit)
+        return self.response(False, "rabbit details fetched", serializer.data)
+
+    def update(self, request, *args, **kwargs):
+        rabbit = self.get_object()
+        serializer = RabbitSerializer(rabbit, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return self.response(False, "rabbit updated successfully", serializer.data)
+        return self.response(True, "Validation Error", serializer.errors, status.HTTP_400_BAD_REQUEST)
+
+    def partial_update(self, request, *args, **kwargs):
+        rabbit = self.get_object()
+        serializer = RabbitSerializer(rabbit, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return self.response(False, "rabbit updated successfully", serializer.data)
+        return self.response(True, "Validation Error", serializer.errors, status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, *args, **kwargs):
+        rabbit = self.get_object()
+        rabbit.delete()
+        return self.response(False, "rabbit deleted successfully", None, status.HTTP_204_NO_CONTENT)
+

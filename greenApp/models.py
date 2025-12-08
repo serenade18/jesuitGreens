@@ -890,12 +890,6 @@ class Inventory(models.Model):
 
 # Payment model
 class Payment(models.Model):
-    STATUS = [
-        ("paid", "Paid"),
-        ("partial", "Partial"),
-        ("pending", "Pending"),
-    ]
-
     id = models.AutoField(primary_key=True)
     order = models.ForeignKey(
         'Orders',  # Link to your Orders model
@@ -909,9 +903,64 @@ class Payment(models.Model):
     )
     order_amount = models.FloatField()  # Total amount of the order
     payment_amount = models.FloatField()  # How much was paid
-    status = models.CharField(max_length=20, choices=STATUS, default="pending")
-    payment_date = models.DateTimeField(auto_now_add=True)
     notes = models.TextField(null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
 
     def __str__(self):
         return f"Payment #{self.id} for Order #{self.order.id} - Customer: {self.customer.name}"
+
+
+# Rabbits Model
+class Rabbit(models.Model):
+    ANIMAL_TYPES = [
+        ("rabbit", "Rabbit"),
+    ]
+
+    SEX_CHOICES = [
+        ('buck', 'Buck'),
+        ('doe', 'Doe'),
+    ]
+
+    BREED_CHOICES = [
+        ("californian", "Californian"),
+        ("chinchilla", "Chinchilla"),
+        ("flemish giant", "Flemish Giant"),
+        ("new zealand white", "New Zealand White"),
+        ("kenya white", "Kenya White"),
+        ("dutch", "Dutch"),
+        ("angora", "Angora"),
+        ("french loop", "French Loop"),
+        ("other", "Other"),
+    ]
+
+    CATEGORY_CHOICES = [
+        ('does', 'Does'),
+        ('bucks', 'Bucks'),
+        ('growers', 'Growers'),
+        ('kits', 'Kits'),
+    ]
+
+    STATUS_CHOICES = [
+        ('alive', 'Alive'),
+        ('sold', 'Sold'),
+        ('dead', 'Dead'),
+        ('culled', 'Culled'),
+    ]
+
+    animal_type = models.CharField(max_length=20, choices=ANIMAL_TYPES, default="rabbit")
+    animal_name = models.CharField(max_length=50, unique=True)
+    sex = models.CharField(max_length=10, choices=SEX_CHOICES)
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
+    breed = models.CharField(max_length=50, choices=BREED_CHOICES, blank=True, null=True)
+    date_of_birth = models.DateField(blank=True, null=True)
+    father = models.ForeignKey('self', related_name='sired', on_delete=models.SET_NULL, null=True, blank=True)
+    mother = models.ForeignKey('self', related_name='birthed', on_delete=models.SET_NULL, null=True, blank=True)
+    cage_number = models.CharField(max_length=50, blank=True, null=True)
+    vaccinated = models.BooleanField(default=False)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='alive')
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.animal_name} ({self.sex}, {self.breed})"
