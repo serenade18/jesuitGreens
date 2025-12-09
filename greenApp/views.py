@@ -29,7 +29,8 @@ from greenProject import settings
 from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference, Notification, TeamMember, \
     LeaveRequest, Salary, SalaryPayment, DairyCattle, MilkCollection, MapDrawing, CalvingRecord, Medication, \
     PoultryBatch, EggCollection, DairyGoat, GoatMilkCollection, KiddingRecord, MortalityRecord, MilkSale, GoatMilkSale, \
-    EggSale, Customers, Orders, Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Rabbit
+    EggSale, Customers, Orders, Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Rabbit, Pond, \
+    CatfishBatch, CatfishSale
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
     NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
@@ -38,7 +39,8 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     EggCollectionSerializer, DairyGoatSerializer, GoatMilkCollectionSerializer, KiddingRecordSerializer, \
     MortalityRecordSerializer, MilkSaleSerializer, GoatMilkSaleSerializer, EggSaleSerializer, CustomerSerializer, \
     OrdersSerializer, ExpenseSerializer, RecurringExpenseSerializer, TaskSerializer, BillPaymentSerializer, \
-    ProcurementSerializer, InventorySerializer, RabbitSerializer
+    ProcurementSerializer, InventorySerializer, RabbitSerializer, PondSerializer, CatfishSerializer, \
+    CatfishSaleSerializer
 
 
 # Create your views here.
@@ -4699,4 +4701,375 @@ class RabbitViewSet(viewsets.ModelViewSet):
         rabbit = self.get_object()
         rabbit.delete()
         return self.response(False, "rabbit deleted successfully", None, status.HTTP_204_NO_CONTENT)
+
+
+# Pond viewset
+class PondViewSet(viewsets.ModelViewSet):
+    queryset = Pond.objects.all().order_by("-id")
+    serializer_class = PondSerializer
+
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole],
+        'destroy': [IsAdminRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action['default']
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    # LIST
+    def list(self, request, *args, **kwargs):
+        serializer = self.get_serializer(self.get_queryset(), many=True)
+        return Response({
+            "error": False,
+            "message": "Ponds retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    # CREATE
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+
+        if serializer.is_valid():
+            pond = serializer.save()
+            return Response({
+                "error": False,
+                "message": "Pond created successfully",
+                "data": self.get_serializer(pond).data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # RETRIEVE
+    def retrieve(self, request, *args, **kwargs):
+        pond = self.get_object()
+        return Response({
+            "error": False,
+            "message": "Pond retrieved successfully",
+            "data": self.get_serializer(pond).data
+        }, status=status.HTTP_200_OK)
+
+    # UPDATE
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        pond = self.get_object()
+
+        serializer = self.get_serializer(pond, data=request.data, partial=partial)
+        if serializer.is_valid():
+            pond = serializer.save()
+            return Response({
+                "error": False,
+                "message": "Pond updated successfully",
+                "data": self.get_serializer(pond).data
+            })
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # DESTROY
+    def destroy(self, request, *args, **kwargs):
+        pond = self.get_object()
+        pond.delete()
+
+        return Response({
+            "error": False,
+            "message": "Pond deleted successfully",
+            "data": None
+        }, status=status.HTTP_200_OK)
+
+
+# Catfish batch viewset
+class CatfishBatchViewSet(viewsets.ModelViewSet):
+    queryset = CatfishBatch.objects.select_related("pond").all().order_by("-id")
+    serializer_class = CatfishSerializer
+
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole],
+        'destroy': [IsAdminRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action['default']
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    # LIST
+    def list(self, request, *args, **kwargs):
+        serializer = self.get_serializer(self.get_queryset(), many=True)
+        return Response({
+            "error": False,
+            "message": "Catfish batches retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    # CREATE
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+
+        if serializer.is_valid():
+            batch = serializer.save()
+            return Response({
+                "error": False,
+                "message": "Catfish batch created successfully",
+                "data": self.get_serializer(batch).data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # RETRIEVE
+    def retrieve(self, request, *args, **kwargs):
+        batch = self.get_object()
+        return Response({
+            "error": False,
+            "message": "Catfish batch retrieved successfully",
+            "data": self.get_serializer(batch).data
+        }, status=status.HTTP_200_OK)
+
+    # UPDATE
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        batch = self.get_object()
+
+        serializer = self.get_serializer(batch, data=request.data, partial=partial)
+        if serializer.is_valid():
+            batch = serializer.save()
+            return Response({
+                "error": False,
+                "message": "Catfish batch updated successfully",
+                "data": self.get_serializer(batch).data
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # DESTROY
+    def destroy(self, request, *args, **kwargs):
+        batch = self.get_object()
+        batch.delete()
+
+        return Response({
+            "error": False,
+            "message": "Catfish batch deleted successfully",
+            "data": None
+        }, status=status.HTTP_200_OK)
+
+
+# Catfish sales viewset
+class CatfishSaleViewSet(viewsets.ViewSet):
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'destroy': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action['default']
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def list(self, request):
+        try:
+            sales = CatfishSale.objects.all().order_by('-id')
+            serializer = CatfishSaleSerializer(sales, many=True)
+            return Response({
+                "error": False,
+                "message": "Sales Records Retrieved",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request):
+        serializer = CatfishSaleSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response({
+                "error": True,
+                "message": "Invalid data",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        sale = serializer.save()
+
+        return Response({
+            "error": False,
+            "message": "Egg sale recorded successfully",
+            "data": CatfishSaleSerializer(sale).data
+        }, status=status.HTTP_201_CREATED)
+
+    def retrieve(self, request, pk=None):
+        try:
+            sale = CatfishSale.objects.get(pk=pk)
+            serializer = CatfishSaleSerializer(sale)
+            return Response({
+                "error": False,
+                "message": "Sale Record Retrieved",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except CatfishSale.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Sale not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        try:
+            sale = CatfishSale.objects.get(pk=pk)
+            serializer = CatfishSaleSerializer(sale, data=request.data)
+
+            if not serializer.is_valid():
+                return Response({
+                    "error": True,
+                    "message": "Invalid data",
+                    "details": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Sale updated successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except CatfishSale.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Sale not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def partial_update(self, request, pk=None):
+        try:
+            sale = CatfishSale.objects.get(pk=pk)
+            serializer = CatfishSaleSerializer(sale, data=request.data, partial=True)
+
+            if not serializer.is_valid():
+                return Response({
+                    "error": True,
+                    "message": "Invalid data",
+                    "details": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Sale partially updated",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except CatfishSale.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Sale not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        try:
+            sale = CatfishSale.objects.get(pk=pk)
+            sale.delete()
+            return Response({
+                "error": False,
+                "message": "Sale deleted successfully",
+                "data": []
+            }, status=status.HTTP_200_OK)
+
+        except CatfishSale.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Sale not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
 
