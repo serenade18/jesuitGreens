@@ -9,7 +9,8 @@ from rest_framework.exceptions import ValidationError
 from greenApp.models import TeamRoles, Farm, NotificationPreference, Notification, TeamMember, LeaveRequest, Salary, \
     SalaryPayment, DairyCattle, MilkCollection, MapDrawing, PoultryBatch, CalvingRecord, Medication, EggCollection, \
     GoatMilkCollection, DairyGoat, KiddingRecord, MortalityRecord, MilkSale, Customers, GoatMilkSale, EggSale, Orders, \
-    Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Payment, Rabbit, Pond, CatfishBatch
+    Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Payment, Rabbit, Pond, CatfishBatch, \
+    CatfishSale
 
 User = get_user_model()
 
@@ -507,3 +508,64 @@ class CatfishSerializer(serializers.ModelSerializer):
     def get_pond_name(self, obj):
         # Return the Pond name
         return obj.pond.name
+
+
+class CatfishSaleSerializer(serializers.ModelSerializer):
+    # Used only when creating/updating
+    customer = serializers.DictField(write_only=True)
+
+    # Returned in API responses
+    customer_details = CustomerSerializer(source="customer", read_only=True)
+
+    class Meta:
+        model = CatfishSale
+        fields = "__all__"
+        # Include customer_details in output
+        extra_fields = ['customer_details']
+
+    def validate(self, attrs):
+        customer_data = self.initial_data.get("customer")
+
+        if not customer_data:
+            raise serializers.ValidationError({"customer": "This field is required."})
+
+        if not customer_data.get("phone"):
+            raise serializers.ValidationError({
+                "customer": {"phone": "Phone is required"}
+            })
+
+        return attrs
+
+    def create(self, validated_data):
+        customer_data = validated_data.pop("customer")
+        phone = customer_data["phone"]
+
+        customer, created = Customers.objects.get_or_create(
+            phone=phone,
+            defaults={
+                "name": customer_data.get("name"),
+                "email": customer_data.get("email"),
+            }
+        )
+
+        if not created:
+            customer.name = customer_data.get("name", customer.name)
+            customer.email = customer_data.get("email", customer.email)
+            customer.save()
+
+        sale = CatfishSale.objects.create(customer=customer, **validated_data)
+
+        # ALWAYS create the matching order
+        Orders.objects.create(
+            customer=customer,
+            product_type="catfish",
+            category="fish",
+            quantity=sale.kilos,
+            unit_price=sale.price_per_kilo,
+            total_amount=sale.total_amount,
+            status=sale.status,
+            notes=sale.notes,
+            catfish_sale=sale
+        )
+
+        return sale

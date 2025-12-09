@@ -12,7 +12,7 @@ from greenApp.views import UserViewSet, UserInfoView, ChangePasswordView, TeamRo
     DairyGoatViewSet, GoatMilkCollectionViewSet, KiddingRecordViewSet, MortalityRecordViewSet, MilkSaleViewSet, \
     GoatMilkSaleViewSet, EggSaleViewSet, CustomerViewSet, OrdersViewSet, ExpenseViewSet, RecurringExpenseViewSet, \
     DashboardViewSet, TaskViewSet, BillPaymentViewSet, ProcurementViewSet, InventoryViewSet, RabbitViewSet, PondViewSet, \
-    CatfishBatchViewSet
+    CatfishBatchViewSet, CatfishSaleViewSet
 
 router = routers.DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -38,6 +38,7 @@ router.register(r"mortality", MortalityRecordViewSet, basename="mortality")
 router.register(r"milk-sales", MilkSaleViewSet, basename="milk-sales")
 router.register(r"goat-milk-sales", GoatMilkSaleViewSet, basename="goat-milk-sales")
 router.register(r"egg-sales", EggSaleViewSet, basename="egg-sales")
+router.register(r"catfish-sales", CatfishSaleViewSet, basename="catfish-sales")
 router.register(r"customers", CustomerViewSet, basename="customers")
 router.register(r"orders", OrdersViewSet, basename="orders")
 router.register(r'expenses', ExpenseViewSet, basename='expense')
