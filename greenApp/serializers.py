@@ -9,7 +9,7 @@ from rest_framework.exceptions import ValidationError
 from greenApp.models import TeamRoles, Farm, NotificationPreference, Notification, TeamMember, LeaveRequest, Salary, \
     SalaryPayment, DairyCattle, MilkCollection, MapDrawing, PoultryBatch, CalvingRecord, Medication, EggCollection, \
     GoatMilkCollection, DairyGoat, KiddingRecord, MortalityRecord, MilkSale, Customers, GoatMilkSale, EggSale, Orders, \
-    Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Payment, Rabbit
+    Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Payment, Rabbit, Pond, CatfishBatch
 
 User = get_user_model()
 
@@ -489,3 +489,21 @@ class RabbitSerializer(serializers.ModelSerializer):
     class Meta:
         model = Rabbit
         fields = '__all__'
+
+
+class PondSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Pond
+        fields = '__all__'
+
+
+class CatfishSerializer(serializers.ModelSerializer):
+    pond_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CatfishBatch
+        fields = '__all__'
+
+    def get_pond_name(self, obj):
+        # Return the Pond name
+        return obj.pond.name

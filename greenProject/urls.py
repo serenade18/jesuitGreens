@@ -11,7 +11,8 @@ from greenApp.views import UserViewSet, UserInfoView, ChangePasswordView, TeamRo
     MapDrawingViewSet, CalvingRecordViewSet, MedicationViewSet, PoultryRecordViewSet, EggCollectionViewSet, \
     DairyGoatViewSet, GoatMilkCollectionViewSet, KiddingRecordViewSet, MortalityRecordViewSet, MilkSaleViewSet, \
     GoatMilkSaleViewSet, EggSaleViewSet, CustomerViewSet, OrdersViewSet, ExpenseViewSet, RecurringExpenseViewSet, \
-    DashboardViewSet, TaskViewSet, BillPaymentViewSet, ProcurementViewSet, InventoryViewSet
+    DashboardViewSet, TaskViewSet, BillPaymentViewSet, ProcurementViewSet, InventoryViewSet, RabbitViewSet, PondViewSet, \
+    CatfishBatchViewSet
 
 router = routers.DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -46,7 +47,9 @@ router.register(r'tasks', TaskViewSet, basename='tasks')
 router.register(r'bill-payments', BillPaymentViewSet, basename='bill-payments')
 router.register(r'procurement', ProcurementViewSet, basename='procurement')
 router.register(r'inventory', InventoryViewSet, basename='inventory')
-router.register(r'rabbit', InventoryViewSet, basename='rabbit')
+router.register(r'rabbits', RabbitViewSet, basename='rabbits')
+router.register(r'ponds', PondViewSet, basename='ponds')
+router.register(r'catfish', CatfishBatchViewSet, basename='catfish')
 
 
 urlpatterns = [

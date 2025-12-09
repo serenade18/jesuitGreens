@@ -964,3 +964,41 @@ class Rabbit(models.Model):
 
     def __str__(self):
         return f"{self.animal_name} ({self.sex}, {self.breed})"
+
+
+# Ponds Model
+class Pond(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=50, unique=True)
+    volume_liters = models.FloatField()
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return self.name
+
+
+# Catfish Batch
+class CatfishBatch(models.Model):
+    ANIMAL_TYPES = [
+        ("catfish", "Catfish"),
+    ]
+
+    id = models.AutoField(primary_key=True)   # This becomes your batch code
+    animal_type = models.CharField(max_length=20, choices=ANIMAL_TYPES, default="catfish")
+    pond = models.ForeignKey(
+        Pond,
+        on_delete=models.CASCADE,
+        related_name="batches"   # Correct semantic relationship
+    )
+    quantity_stocked = models.IntegerField()
+    average_weight_at_stocking = models.FloatField()
+    stocking_date = models.DateField()
+    supplier = models.CharField(max_length=100, null=True, blank=True)
+    health_status = models.CharField(max_length=50, default="Healthy")
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"Batch {self.id} in {self.pond.name}"
+
