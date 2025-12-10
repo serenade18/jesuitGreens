@@ -980,6 +980,46 @@ class CatfishSale(models.Model):
         return f"Sale #{self.id} - {self.customer.name}"
 
 
+# Feeding schedule
+class FeedingSchedule(models.Model):
+    id = models.AutoField(primary_key=True)
+    batch = models.ForeignKey(
+        'CatfishBatch',
+        on_delete=models.CASCADE,
+        related_name='feeding_schedules'
+    )
+    feed_type = models.CharField(max_length=100)       # e.g. Starter, Grower, Finisher
+    feed_amount_per_day = models.FloatField()          # in kg
+    feeding_frequency = models.IntegerField()          # times per day
+    start_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True) # ongoing if null
+    notes = models.TextField(null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"Schedule for Batch {self.batch.id}"
+
+
+# Feeding Record
+class FeedingRecord(models.Model):
+    id = models.AutoField(primary_key=True)
+    schedule = models.ForeignKey(
+        FeedingSchedule,
+        on_delete=models.CASCADE,
+        related_name="feeding_records"
+    )
+    date = models.DateField()
+    amount_fed = models.FloatField()    # total kg fed at this event
+    time = models.TimeField()
+    notes = models.CharField(max_length=255, null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"Feeding on {self.date} for Batch {self.schedule.batch.id}"
+
+
 # All Orders
 class Orders(models.Model):
     PRODUCT_TYPES = [
