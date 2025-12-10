@@ -10,7 +10,7 @@ from greenApp.models import TeamRoles, Farm, NotificationPreference, Notificatio
     SalaryPayment, DairyCattle, MilkCollection, MapDrawing, PoultryBatch, CalvingRecord, Medication, EggCollection, \
     GoatMilkCollection, DairyGoat, KiddingRecord, MortalityRecord, MilkSale, Customers, GoatMilkSale, EggSale, Orders, \
     Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Payment, Rabbit, Pond, CatfishBatch, \
-    CatfishSale
+    CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord
 
 User = get_user_model()
 
@@ -569,3 +569,52 @@ class CatfishSaleSerializer(serializers.ModelSerializer):
         )
 
         return sale
+
+
+class FeedingScheduleSerializer(serializers.ModelSerializer):
+    batch_code = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FeedingSchedule
+        fields = '__all__'
+
+    def get_batch_code(self, obj):
+        return obj.batch.id
+
+
+class FeedingRecordSerializer(serializers.ModelSerializer):
+    batch_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FeedingRecord
+        fields = '__all__'
+
+    def get_batch_id(self, obj):
+        return obj.schedule.batch.id
+
+
+class DairyCattleFeedingScheduleSerializer(serializers.ModelSerializer):
+    cattle_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DairyCattleFeedingSchedule
+        fields = '__all__'
+
+    def get_cattle_name(self, obj):
+        return obj.cattle.animal_name
+        # Adjust if your DairyCattle model uses a different identifier field
+
+
+class DairyCattleFeedingRecordSerializer(serializers.ModelSerializer):
+    schedule_info = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DairyCattleFeedingRecord
+        fields = '__all__'
+
+    def get_schedule_info(self, obj):
+        return {
+            "schedule_id": obj.schedule.id,
+            "feed_type": obj.schedule.feed_type,
+            "cattle_id": obj.schedule.cattle.id,
+        }
