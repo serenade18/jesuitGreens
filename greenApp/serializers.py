@@ -11,7 +11,8 @@ from greenApp.models import TeamRoles, Farm, NotificationPreference, Notificatio
     GoatMilkCollection, DairyGoat, KiddingRecord, MortalityRecord, MilkSale, Customers, GoatMilkSale, EggSale, Orders, \
     Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Payment, Rabbit, Pond, CatfishBatch, \
     CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
-    DairyGoatFeedingSchedule, DairyGoatFeedingRecord, BirdsFeedingSchedule, BirdsFeedingRecord
+    DairyGoatFeedingSchedule, DairyGoatFeedingRecord, BirdsFeedingSchedule, BirdsFeedingRecord, MpesaPayment, \
+    FarmVisitBooking
 
 User = get_user_model()
 
@@ -670,3 +671,37 @@ class BirdsFeedingRecordSerializer(serializers.ModelSerializer):
         return obj.schedule.batch.id
 
 
+class MpesaPaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MpesaPayment
+        fields = [
+            "id",
+            "checkout_request_id",
+            "phone_number",
+            "amount",
+            "status",
+            "result_code",
+            "result_description",
+            "receipt",
+            "transaction_date",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "status",
+            "result_code",
+            "result_description",
+            "receipt",
+            "transaction_date",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class BookingsSerializer(serializers.ModelSerializer):
+    # Optionally link booking to its payment
+    payment = MpesaPaymentSerializer(read_only=True)
+
+    class Meta:
+        model = FarmVisitBooking
+        fields = "__all__"
