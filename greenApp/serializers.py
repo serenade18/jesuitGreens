@@ -11,7 +11,7 @@ from greenApp.models import TeamRoles, Farm, NotificationPreference, Notificatio
     GoatMilkCollection, DairyGoat, KiddingRecord, MortalityRecord, MilkSale, Customers, GoatMilkSale, EggSale, Orders, \
     Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Payment, Rabbit, Pond, CatfishBatch, \
     CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
-    DairyGoatFeedingSchedule, DairyGoatFeedingRecord
+    DairyGoatFeedingSchedule, DairyGoatFeedingRecord, BirdsFeedingSchedule, BirdsFeedingRecord
 
 User = get_user_model()
 
@@ -646,4 +646,27 @@ class DairyGoatFeedingRecordSerializer(serializers.ModelSerializer):
             "feed_type": obj.schedule.feed_type,
             "goat_id": obj.schedule.goat.id,
         }
+
+
+class BirdsFeedingScheduleSerializer(serializers.ModelSerializer):
+    batch_code = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BirdsFeedingSchedule
+        fields = '__all__'
+
+    def get_batch_code(self, obj):
+        return obj.batch.id
+
+
+class BirdsFeedingRecordSerializer(serializers.ModelSerializer):
+    batch_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BirdsFeedingRecord
+        fields = '__all__'
+
+    def get_batch_id(self, obj):
+        return obj.schedule.batch.id
+
 
