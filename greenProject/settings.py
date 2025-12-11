@@ -175,3 +175,12 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'greenApp.UserAccount'
+
+# Mpesa Credentials
+MPESA_ENV="sandbox"
+MPESA_CONSUMER_KEY="42b7oIjhOtdnawRRkNHBGnAyGiOzUooWC7KrdYaalKgTUQQt"
+MPESA_CONSUMER_SECRET="3AGyeZehsK9Wi0sGC5t30G6lTGT8hxBrKpF3WYNxk5AwAMmCaOnCU2dLWmr4bU4H"
+MPESA_SHORTCODE="174379"
+MPESA_PASSKEY="bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919"
+MPESA_SHORTCODE_TYPE="Paybill"
+MPESA_CALLBACK_URL = "https://jgf.linkworldcourier.com/api/mpay/callback/"

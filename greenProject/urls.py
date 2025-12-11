@@ -14,8 +14,7 @@ from greenApp.views import UserViewSet, UserInfoView, ChangePasswordView, TeamRo
     DashboardViewSet, TaskViewSet, BillPaymentViewSet, ProcurementViewSet, InventoryViewSet, RabbitViewSet, PondViewSet, \
     CatfishBatchViewSet, CatfishSaleViewSet, FeedingRecordViewSet, FeedingScheduleViewSet, \
     DairyCattleFeedingScheduleViewSet, DairyCattleFeedingRecordViewSet, DairyGoatFeedingScheduleViewSet, \
-    DairyGoatFeedingRecordViewSet
-
+    DairyGoatFeedingRecordViewSet, MpesaViewSet, BookingPaymentViewSet
 
 router = routers.DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -60,6 +59,8 @@ router.register(r'goat-fschedules', DairyGoatFeedingScheduleViewSet, basename='g
 router.register(r'catfish-frecords', FeedingRecordViewSet, basename='catfish-frecords')
 router.register(r'cattle-frecords', DairyCattleFeedingRecordViewSet, basename='cattle-frecords')
 router.register(r'goat-frecords', DairyGoatFeedingRecordViewSet, basename='goat-frecords')
+router.register(r'mpay', MpesaViewSet, basename='mpay')
+router.register(r'bookings', BookingPaymentViewSet, basename='bookings')
 
 
 urlpatterns = [

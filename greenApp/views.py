@@ -31,8 +31,10 @@ from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference
     PoultryBatch, EggCollection, DairyGoat, GoatMilkCollection, KiddingRecord, MortalityRecord, MilkSale, GoatMilkSale, \
     EggSale, Customers, Orders, Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Rabbit, Pond, \
     CatfishBatch, CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
-    DairyGoatFeedingSchedule, DairyGoatFeedingRecord
+    DairyGoatFeedingSchedule, DairyGoatFeedingRecord, MpesaPayment, FarmVisitBooking
+
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
+
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
     NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
     SalaryDetailSerializer, SalaryPaymentSerializer, DairyCattleSerializer, MilkCollectionSerializer, \
@@ -42,7 +44,10 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     OrdersSerializer, ExpenseSerializer, RecurringExpenseSerializer, TaskSerializer, BillPaymentSerializer, \
     ProcurementSerializer, InventorySerializer, RabbitSerializer, PondSerializer, CatfishSerializer, \
     CatfishSaleSerializer, FeedingScheduleSerializer, FeedingRecordSerializer, DairyCattleFeedingScheduleSerializer, \
-    DairyCattleFeedingRecordSerializer, DairyGoatFeedingScheduleSerializer, DairyGoatFeedingRecordSerializer
+    DairyCattleFeedingRecordSerializer, DairyGoatFeedingScheduleSerializer, DairyGoatFeedingRecordSerializer, \
+    MpesaPaymentSerializer, BookingsSerializer
+
+from .services import MpesaService
 
 
 # Create your views here.
@@ -5773,4 +5778,301 @@ class DairyGoatFeedingRecordViewSet(viewsets.ModelViewSet):
             "message": "Feeding record deleted successfully",
             "data": None
         }, status=status.HTTP_200_OK)
+
+
+# Book and pay
+class BookingPaymentViewSet(viewsets.ViewSet):
+    permission_classes_by_action = {
+        "create": [],
+        "list": [],
+        "retrieve": [],
+        "default": [],
+    }
+
+    def get_permissions(self):
+        return [
+            permission() for permission in
+            self.permission_classes_by_action.get(
+                self.action, self.permission_classes_by_action["default"]
+            )
+        ]
+
+    def create(self, request):
+        try:
+            name = request.data.get("name")
+            email = request.data.get("email")
+            phone = request.data.get("phone")
+            visit_date = request.data.get("visit_date")
+            time_slot = request.data.get("time_slot")
+            number_of_visitors = int(request.data.get("number_of_visitors", 1))
+            total_amount = float(request.data.get("total_amount"))
+
+            # Validate mandatory fields
+            missing = [f for f in ["name", "email", "phone", "visit_date", "time_slot", "total_amount"]
+                       if not request.data.get(f)]
+            if missing:
+                return Response(
+                    {"error": True, "message": f"Missing required fields: {', '.join(missing)}"},
+                    status=400
+                )
+
+            # Create booking with pending status
+            booking = FarmVisitBooking.objects.create(
+                name=name,
+                email=email,
+                phone=phone,
+                visit_date=visit_date,
+                time_slot=time_slot,
+                number_of_visitors=number_of_visitors,
+                total_amount=total_amount,
+                added_on=timezone.now(),
+            )
+
+            # Initiate STK push
+            mpesa = MpesaService()
+            stk_result = mpesa.initiate_stk_push(
+                phone=phone,
+                amount=total_amount,
+                reference=f"BOOK-{booking.id}",
+                description="Farm Visit Booking Payment"
+            )
+
+            if stk_result.get("ResponseCode") == "0":
+                # Create payment
+                payment = MpesaPayment.objects.create(
+                    checkout_request_id=stk_result["CheckoutRequestID"],
+                    phone_number=phone,
+                    amount=total_amount,
+                    status="pending",
+                    result_code=stk_result.get("ResponseCode"),
+                    result_description=stk_result.get("ResponseDescription"),
+                )
+
+                # Assign payment to booking
+                booking.payment = payment
+                booking.save()
+
+                serializer = BookingsSerializer(booking)
+                return Response(
+                    {
+                        "error": False,
+                        "message": f"STK Push sent to {phone}. Complete the payment to confirm your booking.",
+                        "data": serializer.data,
+                    },
+                    status=status.HTTP_201_CREATED,
+                )
+
+            # STK initiation failed
+            return Response(
+                {"error": True, "message": "Failed to initiate M-PESA STK Push", "data": stk_result},
+                status=400,
+            )
+
+        except Exception as e:
+            return Response(
+                {"error": True, "message": "Booking creation failed", "details": str(e)},
+                status=500
+            )
+
+    def list(self, request):
+        bookings = FarmVisitBooking.objects.all().order_by("-id")
+        serializer = BookingsSerializer(bookings, many=True)
+        return Response(
+            {"error": False, "message": "All Bookings", "data": serializer.data},
+            status=200
+        )
+
+    def retrieve(self, request, pk):
+        booking = get_object_or_404(FarmVisitBooking, pk=pk)
+        serializer = BookingsSerializer(booking)
+        return Response(
+            {"error": False, "message": "Booking Details", "data": serializer.data},
+            status=200
+        )
+
+
+# mpesa farm bookings
+class MpesaViewSet(viewsets.ViewSet):
+    permission_classes = [AllowAny]
+
+    @action(detail=False, methods=["post"])
+    def pay(self, request):
+        phone = request.data.get("phone_number")
+        amount = request.data.get("amount")
+        booking_id = request.data.get("booking_id")  # use booking instead of donation
+        description = request.data.get("description", "Farm visit payment")
+
+        if not phone or not amount or not booking_id:
+            return Response(
+                {
+                    "error": True,
+                    "message": "phone_number, amount, and booking_id are required.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate booking exists
+        booking = FarmVisitBooking.objects.filter(id=booking_id).first()
+        if not booking:
+            return Response(
+                {"error": True, "message": "Booking not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        mpesa = MpesaService()
+
+        try:
+            response = mpesa.initiate_stk_push(
+                phone_number=phone,
+                amount=amount,
+                reference=f"BOOKING-{booking_id}",
+                description=description,
+            )
+
+            if response.get("ResponseCode") == "0":
+                # Create pending payment record
+                payment = MpesaPayment.objects.create(
+                    checkout_request_id=response.get("CheckoutRequestID"),
+                    phone_number=phone,
+                    amount=amount,
+                    status="pending",
+                    result_code=response.get("ResponseCode"),
+                    result_description=response.get("ResponseDescription"),
+                )
+
+                # Link booking → payment
+                booking.payment = payment
+                booking.save()
+
+                serializer = BookingsSerializer(booking)
+
+                return Response(
+                    {
+                        "error": False,
+                        "message": "STK Push sent. Complete payment on your phone.",
+                        "data": serializer.data,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+            return Response(
+                {
+                    "error": True,
+                    "message": response.get("errorMessage", "Failed to initiate STK push."),
+                    "data": response,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception as e:
+            return Response(
+                {"error": True, "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=False, methods=["post"])
+    def callback(self, request):
+        callback_data = request.data.get("Body", {}).get("stkCallback")
+
+        if not callback_data:
+            return Response(
+                {"error": True, "message": "Invalid callback payload"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        checkout_id = callback_data.get("CheckoutRequestID")
+        result_code = int(callback_data.get("ResultCode", -1))
+        result_desc = callback_data.get("ResultDesc")
+
+        payment = MpesaPayment.objects.filter(checkout_request_id=checkout_id).first()
+        if not payment:
+            return Response(
+                {"error": True, "message": "Payment record not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # SUCCESS CASE
+        if result_code == 0:
+            metadata = {}
+            for item in callback_data.get("CallbackMetadata", {}).get("Item", []):
+                metadata[item.get("Name")] = item.get("Value")
+
+            phone = metadata.get("PhoneNumber", payment.phone_number)
+            amount = metadata.get("Amount", payment.amount)
+            receipt = metadata.get("MpesaReceiptNumber")
+            trx_date_str = metadata.get("TransactionDate")
+
+            trx_date = timezone.now()
+            if trx_date_str:
+                try:
+                    trx_date = datetime.strptime(str(trx_date_str), "%Y%m%d%H%M%S")
+                except:
+                    pass
+
+            payment.phone_number = phone
+            payment.amount = amount
+            payment.receipt = receipt
+            payment.transaction_date = trx_date
+            payment.status = "success"
+            payment.result_code = result_code
+            payment.result_description = result_desc
+            payment.save()
+
+            booking = FarmVisitBooking.objects.filter(payment=payment).first()
+            serializer = BookingsSerializer(booking)
+
+            return Response(
+                {
+                    "error": False,
+                    "message": "Payment successful and booking updated.",
+                    "data": serializer.data,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # FAILURE CASE
+        payment.status = "failed"
+        payment.result_code = result_code
+        payment.result_description = result_desc
+        payment.save()
+
+        return Response(
+            {"error": True, "message": f"Payment failed: {result_desc}"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    @action(detail=False, methods=["get"])
+    def check_status(self, request):
+        checkout_id = request.query_params.get("checkout_request_id")
+
+        if not checkout_id:
+            return Response(
+                {"error": True, "message": "checkout_request_id is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payment = MpesaPayment.objects.filter(checkout_request_id=checkout_id).first()
+        if not payment:
+            return Response(
+                {"error": True, "message": "Payment record not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        booking = FarmVisitBooking.objects.filter(payment=payment).first()
+        if not booking:
+            return Response(
+                {"error": True, "message": "Booking not found for this payment"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = BookingsSerializer(booking)
+
+        return Response(
+            {
+                "error": False,
+                "message": "Payment status retrieved",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
