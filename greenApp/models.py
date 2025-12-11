@@ -428,7 +428,7 @@ class PoultryBatch(models.Model):
         return f"{self.category.title()} - {self.breed} ({self.number_of_chicks} chicks)"
 
 
-# Catfish Feeding schedule
+# Birds Feeding schedule
 class BirdsFeedingSchedule(models.Model):
     id = models.AutoField(primary_key=True)
     batch = models.ForeignKey(
@@ -449,7 +449,7 @@ class BirdsFeedingSchedule(models.Model):
         return f"Schedule for Batch {self.batch.id}"
 
 
-# Catfish Feeding Record
+# Birds Feeding Record
 class BirdsFeedingRecord(models.Model):
     id = models.AutoField(primary_key=True)
     schedule = models.ForeignKey(

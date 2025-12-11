@@ -31,7 +31,7 @@ from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference
     PoultryBatch, EggCollection, DairyGoat, GoatMilkCollection, KiddingRecord, MortalityRecord, MilkSale, GoatMilkSale, \
     EggSale, Customers, Orders, Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Rabbit, Pond, \
     CatfishBatch, CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
-    DairyGoatFeedingSchedule, DairyGoatFeedingRecord, MpesaPayment, FarmVisitBooking
+    DairyGoatFeedingSchedule, DairyGoatFeedingRecord, MpesaPayment, FarmVisitBooking, BirdsFeedingSchedule, BirdsFeedingRecord
 
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 
@@ -45,7 +45,7 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     ProcurementSerializer, InventorySerializer, RabbitSerializer, PondSerializer, CatfishSerializer, \
     CatfishSaleSerializer, FeedingScheduleSerializer, FeedingRecordSerializer, DairyCattleFeedingScheduleSerializer, \
     DairyCattleFeedingRecordSerializer, DairyGoatFeedingScheduleSerializer, DairyGoatFeedingRecordSerializer, \
-    MpesaPaymentSerializer, BookingsSerializer
+    MpesaPaymentSerializer, BookingsSerializer, BirdsFeedingScheduleSerializer, BirdsFeedingRecordSerializer
 
 from .services import MpesaService
 
@@ -2267,6 +2267,194 @@ class PoultryRecordViewSet(viewsets.ViewSet):
                 "error": True,
                 "message": "Poultry Record Not Found"
             }, status=status.HTTP_404_NOT_FOUND)
+
+
+# Poultry feeding schedule
+class BirdsFeedingScheduleViewSet(viewsets.ModelViewSet):
+    queryset = BirdsFeedingSchedule.objects.all().order_by("-start_date")
+    serializer_class = BirdsFeedingScheduleSerializer
+
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole],
+        'destroy': [IsAdminRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action['default']
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+
+        return Response({
+            "error": False,
+            "message": "Feeding schedules retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+
+        if serializer.is_valid():
+            schedule = serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Feeding schedule created successfully",
+                "data": self.get_serializer(schedule).data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Poultry feeding record
+class BirdsFeedingRecordViewSet(viewsets.ModelViewSet):
+    queryset = BirdsFeedingRecord.objects.all().order_by("-date", "-time")
+    serializer_class = BirdsFeedingRecordSerializer
+
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole],
+        'destroy': [IsAdminRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action['default']
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    # LIST
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+
+        return Response({
+            "error": False,
+            "message": "Feeding records retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    # CREATE
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+
+        if serializer.is_valid():
+            record = serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Feeding record created successfully",
+                "data": self.get_serializer(record).data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # RETRIEVE
+    def retrieve(self, request, *args, **kwargs):
+        try:
+            record = self.get_object()
+            serializer = self.get_serializer(record)
+
+            return Response({
+                "error": False,
+                "message": "Feeding record retrieved successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except BirdsFeedingRecord.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Feeding record not found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    # UPDATE
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+
+        try:
+            record = self.get_object()
+        except BirdsFeedingRecord.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Feeding record not found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = self.get_serializer(record, data=request.data, partial=partial)
+
+        if serializer.is_valid():
+            record = serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Feeding record updated successfully",
+                "data": self.get_serializer(record).data
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # DESTROY
+    def destroy(self, request, *args, **kwargs):
+        try:
+            record = self.get_object()
+        except BirdsFeedingRecord.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Feeding record not found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        record.delete()
+
+        return Response({
+            "error": False,
+            "message": "Feeding record deleted successfully",
+            "data": None
+        }, status=status.HTTP_200_OK)
 
 
 # Eggs collection records
