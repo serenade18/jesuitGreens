@@ -10,7 +10,8 @@ from greenApp.models import TeamRoles, Farm, NotificationPreference, Notificatio
     SalaryPayment, DairyCattle, MilkCollection, MapDrawing, PoultryBatch, CalvingRecord, Medication, EggCollection, \
     GoatMilkCollection, DairyGoat, KiddingRecord, MortalityRecord, MilkSale, Customers, GoatMilkSale, EggSale, Orders, \
     Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Payment, Rabbit, Pond, CatfishBatch, \
-    CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord
+    CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
+    DairyGoatFeedingSchedule, DairyGoatFeedingRecord
 
 User = get_user_model()
 
@@ -618,3 +619,31 @@ class DairyCattleFeedingRecordSerializer(serializers.ModelSerializer):
             "feed_type": obj.schedule.feed_type,
             "cattle_id": obj.schedule.cattle.id,
         }
+
+
+class DairyGoatFeedingScheduleSerializer(serializers.ModelSerializer):
+    goat_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DairyGoatFeedingSchedule
+        fields = '__all__'
+
+    def get_goat_name(self, obj):
+        return obj.goat.animal_name
+        # Adjust if your DairyCattle model uses a different identifier field
+
+
+class DairyGoatFeedingRecordSerializer(serializers.ModelSerializer):
+    schedule_info = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DairyGoatFeedingRecord
+        fields = '__all__'
+
+    def get_schedule_info(self, obj):
+        return {
+            "schedule_id": obj.schedule.id,
+            "feed_type": obj.schedule.feed_type,
+            "goat_id": obj.schedule.goat.id,
+        }
+

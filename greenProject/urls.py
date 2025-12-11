@@ -13,7 +13,9 @@ from greenApp.views import UserViewSet, UserInfoView, ChangePasswordView, TeamRo
     GoatMilkSaleViewSet, EggSaleViewSet, CustomerViewSet, OrdersViewSet, ExpenseViewSet, RecurringExpenseViewSet, \
     DashboardViewSet, TaskViewSet, BillPaymentViewSet, ProcurementViewSet, InventoryViewSet, RabbitViewSet, PondViewSet, \
     CatfishBatchViewSet, CatfishSaleViewSet, FeedingRecordViewSet, FeedingScheduleViewSet, \
-    DairyCattleFeedingScheduleViewSet, DairyCattleFeedingRecordViewSet
+    DairyCattleFeedingScheduleViewSet, DairyCattleFeedingRecordViewSet, DairyGoatFeedingScheduleViewSet, \
+    DairyGoatFeedingRecordViewSet
+
 
 router = routers.DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -54,8 +56,10 @@ router.register(r'ponds', PondViewSet, basename='ponds')
 router.register(r'catfish', CatfishBatchViewSet, basename='catfish')
 router.register(r'catfish-fschedules', FeedingScheduleViewSet, basename='catfish-fschedules')
 router.register(r'cattle-fschedules', DairyCattleFeedingScheduleViewSet, basename='cattle-fschedules')
+router.register(r'goat-fschedules', DairyGoatFeedingScheduleViewSet, basename='goat-fschedules')
 router.register(r'catfish-frecords', FeedingRecordViewSet, basename='catfish-frecords')
 router.register(r'cattle-frecords', DairyCattleFeedingRecordViewSet, basename='cattle-frecords')
+router.register(r'goat-frecords', DairyGoatFeedingRecordViewSet, basename='goat-frecords')
 
 
 urlpatterns = [

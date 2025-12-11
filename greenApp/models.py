@@ -571,6 +571,46 @@ class DairyGoat(models.Model):
         return f"{self.animal_name} ({self.breed})"
 
 
+# Dairy cattle Feeding schedule
+class DairyGoatFeedingSchedule(models.Model):
+    id = models.AutoField(primary_key=True)
+    goat = models.ForeignKey(
+        'DairyGoat',
+        on_delete=models.CASCADE,
+        related_name='feeding_schedules'
+    )
+    feed_type = models.CharField(max_length=100)       # e.g. Starter, Grower, Finisher
+    feed_amount_per_day = models.FloatField()          # in kg
+    feeding_frequency = models.IntegerField()          # times per day
+    start_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True) # ongoing if null
+    notes = models.TextField(null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"Schedule for {self.goat.id}"
+
+
+# Dairy cattle Feeding Record
+class DairyGoatFeedingRecord(models.Model):
+    id = models.AutoField(primary_key=True)
+    schedule = models.ForeignKey(
+        DairyGoatFeedingSchedule,
+        on_delete=models.CASCADE,
+        related_name="feeding_records"
+    )
+    date = models.DateField()
+    amount_fed = models.FloatField()    # total kg fed at this event
+    time = models.TimeField()
+    notes = models.CharField(max_length=255, null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"Feeding on {self.date} for {self.schedule.goat.id}"
+
+
 # Goat Milk Collection
 class GoatMilkCollection(models.Model):
     SESSIONS = [

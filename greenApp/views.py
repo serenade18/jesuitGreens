@@ -30,7 +30,8 @@ from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference
     LeaveRequest, Salary, SalaryPayment, DairyCattle, MilkCollection, MapDrawing, CalvingRecord, Medication, \
     PoultryBatch, EggCollection, DairyGoat, GoatMilkCollection, KiddingRecord, MortalityRecord, MilkSale, GoatMilkSale, \
     EggSale, Customers, Orders, Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Rabbit, Pond, \
-    CatfishBatch, CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord
+    CatfishBatch, CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
+    DairyGoatFeedingSchedule, DairyGoatFeedingRecord
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, TeamRolesSerializer, FarmSerializer, \
     NotificationPreferenceSerializer, NotificationSerializer, TeamSerializer, LeaveRequestSerializer, SalarySerializer, \
@@ -41,7 +42,7 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     OrdersSerializer, ExpenseSerializer, RecurringExpenseSerializer, TaskSerializer, BillPaymentSerializer, \
     ProcurementSerializer, InventorySerializer, RabbitSerializer, PondSerializer, CatfishSerializer, \
     CatfishSaleSerializer, FeedingScheduleSerializer, FeedingRecordSerializer, DairyCattleFeedingScheduleSerializer, \
-    DairyCattleFeedingRecordSerializer
+    DairyCattleFeedingRecordSerializer, DairyGoatFeedingScheduleSerializer, DairyGoatFeedingRecordSerializer
 
 
 # Create your views here.
@@ -4704,7 +4705,7 @@ class RabbitViewSet(viewsets.ModelViewSet):
         return self.response(False, "rabbit deleted successfully", None, status.HTTP_204_NO_CONTENT)
 
 
-# Pond viewset
+# Pond viewSet
 class PondViewSet(viewsets.ModelViewSet):
     queryset = Pond.objects.all().order_by("-id")
     serializer_class = PondSerializer
@@ -4802,7 +4803,7 @@ class PondViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_200_OK)
 
 
-# Catfish batch viewset
+# Catfish batch viewSet
 class CatfishBatchViewSet(viewsets.ModelViewSet):
     queryset = CatfishBatch.objects.select_related("pond").all().order_by("-id")
     serializer_class = CatfishSerializer
@@ -5293,17 +5294,13 @@ class DairyCattleFeedingScheduleViewSet(viewsets.ModelViewSet):
 
         return [AnyPermission()]
 
+    # REMOVED THE FILTER HERE
     def get_queryset(self):
-        cattle_id = self.request.query_params.get("cattle_id")
-        queryset = self.queryset
-        if cattle_id:
-            queryset = queryset.filter(cattle=cattle_id)
-        return queryset
+        return self.queryset
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
-
         return Response({
             "error": False,
             "message": "Dairy cattle feeding schedules retrieved successfully",
@@ -5312,10 +5309,8 @@ class DairyCattleFeedingScheduleViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
-
         if serializer.is_valid():
             schedule = serializer.save()
-
             return Response({
                 "error": False,
                 "message": "Feeding schedule created successfully",
@@ -5332,13 +5327,11 @@ class DairyCattleFeedingScheduleViewSet(viewsets.ModelViewSet):
         try:
             schedule = self.get_object()
             serializer = self.get_serializer(schedule)
-
             return Response({
                 "error": False,
                 "message": "Feeding schedule retrieved successfully",
                 "data": serializer.data
             }, status=status.HTTP_200_OK)
-
         except DairyCattleFeedingSchedule.DoesNotExist:
             return Response({
                 "error": True,
@@ -5348,7 +5341,6 @@ class DairyCattleFeedingScheduleViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
-
         try:
             schedule = self.get_object()
         except DairyCattleFeedingSchedule.DoesNotExist:
@@ -5359,10 +5351,8 @@ class DairyCattleFeedingScheduleViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_404_NOT_FOUND)
 
         serializer = self.get_serializer(schedule, data=request.data, partial=partial)
-
         if serializer.is_valid():
             schedule = serializer.save()
-
             return Response({
                 "error": False,
                 "message": "Feeding schedule updated successfully",
@@ -5386,7 +5376,6 @@ class DairyCattleFeedingScheduleViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_404_NOT_FOUND)
 
         schedule.delete()
-
         return Response({
             "error": False,
             "message": "Feeding schedule deleted successfully",
@@ -5425,18 +5414,7 @@ class DairyCattleFeedingRecordViewSet(viewsets.ModelViewSet):
         return [AnyPermission()]
 
     def get_queryset(self):
-        schedule_id = self.request.query_params.get("schedule_id")
-        cattle_id = self.request.query_params.get("cattle_id")
-
-        queryset = self.queryset
-
-        if schedule_id:
-            queryset = queryset.filter(schedule_id=schedule_id)
-
-        if cattle_id:
-            queryset = queryset.filter(schedule__cattle_id=cattle_id)
-
-        return queryset
+        return self.queryset
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -5517,6 +5495,271 @@ class DairyCattleFeedingRecordViewSet(viewsets.ModelViewSet):
         try:
             record = self.get_object()
         except DairyCattleFeedingRecord.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Feeding record not found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        record.delete()
+
+        return Response({
+            "error": False,
+            "message": "Feeding record deleted successfully",
+            "data": None
+        }, status=status.HTTP_200_OK)
+
+
+# Dairy Goat Feeding Schedule ViewSet
+class DairyGoatFeedingScheduleViewSet(viewsets.ModelViewSet):
+    queryset = DairyGoatFeedingSchedule.objects.all().order_by("-id")
+    serializer_class = DairyGoatFeedingScheduleSerializer
+
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'destroy': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action['default']
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def get_queryset(self):
+        return self.queryset
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+
+        return Response({
+            "error": False,
+            "message": "Dairy goat feeding schedules retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+
+        if serializer.is_valid():
+            schedule = serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Feeding schedule created successfully",
+                "data": self.get_serializer(schedule).data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, *args, **kwargs):
+        try:
+            schedule = self.get_object()
+            serializer = self.get_serializer(schedule)
+
+            return Response({
+                "error": False,
+                "message": "Feeding schedule retrieved successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except DairyGoatFeedingSchedule.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Feeding schedule not found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+
+        try:
+            schedule = self.get_object()
+        except DairyGoatFeedingSchedule.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Feeding schedule not found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = self.get_serializer(schedule, data=request.data, partial=partial)
+
+        if serializer.is_valid():
+            schedule = serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Feeding schedule updated successfully",
+                "data": self.get_serializer(schedule).data
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            schedule = self.get_object()
+        except DairyGoatFeedingSchedule.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Feeding schedule not found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        schedule.delete()
+
+        return Response({
+            "error": False,
+            "message": "Feeding schedule deleted successfully",
+            "data": None
+        }, status=status.HTTP_200_OK)
+
+
+# Dairy Goat Feeding Record ViewSet
+class DairyGoatFeedingRecordViewSet(viewsets.ModelViewSet):
+    queryset = DairyGoatFeedingRecord.objects.all().order_by("-id")
+    serializer_class = DairyGoatFeedingRecordSerializer
+
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'destroy': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action['default']
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def get_queryset(self):
+        schedule_id = self.request.query_params.get("schedule_id")
+        goat_id = self.request.query_params.get("goat_id")
+
+        queryset = self.queryset
+
+        if schedule_id:
+            queryset = queryset.filter(schedule_id=schedule_id)
+
+        if goat_id:
+            queryset = queryset.filter(schedule__goat_id=goat_id)
+
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+
+        return Response({
+            "error": False,
+            "message": "Dairy cattle feeding records retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+
+        if serializer.is_valid():
+            record = serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Feeding record created successfully",
+                "data": self.get_serializer(record).data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, *args, **kwargs):
+        try:
+            record = self.get_object()
+        except DairyGoatFeedingRecord.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Feeding record not found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = self.get_serializer(record)
+
+        return Response({
+            "error": False,
+            "message": "Feeding record retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+
+        try:
+            record = self.get_object()
+        except DairyGoatFeedingRecord.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Feeding record not found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = self.get_serializer(record, data=request.data, partial=partial)
+
+        if serializer.is_valid():
+            record = serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Feeding record updated successfully",
+                "data": self.get_serializer(record).data
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            record = self.get_object()
+        except DairyGoatFeedingRecord.DoesNotExist:
             return Response({
                 "error": True,
                 "message": "Feeding record not found",
