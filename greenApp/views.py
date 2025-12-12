@@ -5971,10 +5971,12 @@ class DairyGoatFeedingRecordViewSet(viewsets.ModelViewSet):
 # Book and pay
 class BookingPaymentViewSet(viewsets.ViewSet):
     permission_classes_by_action = {
-        "create": [],
-        "list": [],
-        "retrieve": [],
-        "default": [],
+        "create": [AllowAny],
+        "list": [IsAuthenticated],
+        "update": [IsAuthenticated],
+        "retrieve": [AllowAny],
+        "destroy": [IsAuthenticated],
+        "default": [AllowAny],
     }
 
     def get_permissions(self):
@@ -6077,6 +6079,62 @@ class BookingPaymentViewSet(viewsets.ViewSet):
             {"error": False, "message": "Booking Details", "data": serializer.data},
             status=200
         )
+
+    # ---------------------------------------------------------
+    # UPDATE (PUT/PATCH)
+    # ---------------------------------------------------------
+
+    def update(self, request, pk=None):
+        return self._update_booking(request, pk, partial=False)
+
+    def partial_update(self, request, pk=None):
+        return self._update_booking(request, pk, partial=True)
+
+    def _update_booking(self, request, pk, partial):
+        try:
+            booking = get_object_or_404(FarmVisitBooking, pk=pk)
+
+            # Prevent alteration of payment objects
+            protected_fields = ["payment", "checkout_request_id", "result_code"]
+            for f in protected_fields:
+                if f in request.data:
+                    return Response(
+                        {"error": True, "message": f"Field '{f}' cannot be modified."},
+                        status=400
+                    )
+
+            serializer = BookingsSerializer(booking, data=request.data, partial=partial)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+            return Response(
+                {"error": False, "message": "Booking updated successfully", "data": serializer.data},
+                status=200
+            )
+
+        except Exception as e:
+            return Response(
+                {"error": True, "message": "Failed to update booking", "details": str(e)},
+                status=500
+            )
+
+        # ---------------------------------------------------------
+        # DELETE
+        # ---------------------------------------------------------
+
+    def destroy(self, request, pk):
+        try:
+            booking = get_object_or_404(FarmVisitBooking, pk=pk)
+            booking.delete()
+            return Response(
+                {"error": False, "message": "Booking deleted successfully"},
+                status=200
+            )
+        except Exception as e:
+            return Response(
+                {"error": True, "message": "Failed to delete booking", "details": str(e)},
+                status=500
+            )
 
 
 # mpesa farm bookings

@@ -1214,6 +1214,13 @@ class FarmVisitBooking(models.Model):
         ("04:00 PM - 06:00 PM", "04:00 PM - 06:00 PM"),
     ]
 
+    STATUS_CHOICE = [
+        ("pending", "Pending"),
+        ("completed", "Completed"),
+        ("cancelled", "Cancelled"),
+        ("confirmed", "Confirmed"),
+    ]
+
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100)
     email = models.EmailField(max_length=255)
@@ -1222,6 +1229,7 @@ class FarmVisitBooking(models.Model):
     visit_date = models.DateField()
     time_slot = models.CharField(max_length=50, choices=TIME_SLOTS)
     special_requests = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICE, default="pending")
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     payment = models.OneToOneField(  # Link bookings to one payment
         MpesaPayment,
