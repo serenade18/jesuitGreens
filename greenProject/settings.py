@@ -176,6 +176,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'greenApp.UserAccount'
 
+AUTHENTICATION_BACKENDS = [
+    'greenApp.backends.EmailOrUsernameBackend',  # custom backend
+    'django.contrib.auth.backends.ModelBackend',  # default fallback
+]
+
 # Mpesa Credentials
 MPESA_ENV="sandbox"
 MPESA_CONSUMER_KEY="42b7oIjhOtdnawRRkNHBGnAyGiOzUooWC7KrdYaalKgTUQQt"

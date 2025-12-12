@@ -3,8 +3,10 @@ from unicodedata import category
 from datetime import date
 
 from rest_framework import serializers
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, authenticate
 from rest_framework.exceptions import ValidationError
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 from greenApp.models import TeamRoles, Farm, NotificationPreference, Notification, TeamMember, LeaveRequest, Salary, \
     SalaryPayment, DairyCattle, MilkCollection, MapDrawing, PoultryBatch, CalvingRecord, Medication, EggCollection, \
@@ -15,6 +17,44 @@ from greenApp.models import TeamRoles, Farm, NotificationPreference, Notificatio
     FarmVisitBooking, FarmPlants, Plot
 
 User = get_user_model()
+
+
+class CustomTokenObtainPairSerializer(serializers.Serializer):
+    username = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        login = attrs.get("username")
+        password = attrs.get("password")
+
+        if not login or not password:
+            raise serializers.ValidationError("Both login and password are required.")
+
+        user = authenticate(
+            request=self.context.get("request"),
+            username=login,
+            password=password
+        )
+
+        if not user:
+            raise serializers.ValidationError("Invalid login credentials.")
+
+        refresh = RefreshToken.for_user(user)
+        return {
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "username": user.username,
+                "name": user.name,
+                "role": user.role,
+            }
+        }
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
 
 
 class UserCreateSerializer(serializers.ModelSerializer):

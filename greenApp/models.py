@@ -10,14 +10,14 @@ from greenProject import settings
 
 # Custom User Manager
 class UserAccountManager(BaseUserManager):
-    def create_user(self, email, name, role, password=None, **extra_fields):
+    def create_user(self, email, name, username=None, role=None, password=None, **extra_fields):
         if not email:
             raise ValueError("Users must have an email address")
         if not role:
             raise ValueError("Users must have a role")
 
         email = self.normalize_email(email)
-        user = self.model(email=email, name=name, role=role, **extra_fields)
+        user = self.model(email=email, name=name, username=username, role=role, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
         return user
@@ -48,7 +48,7 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
 
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=150)
-    username = models.CharField(max_length=150, null=True, blank=True)
+    username = models.CharField(max_length=150, null=True, blank=True, unique=True)
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.FARM_WORKER)
     phone = models.CharField(max_length=20, blank=True, null=True)
     is_active = models.BooleanField(default=True)
