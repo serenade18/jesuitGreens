@@ -22,10 +22,11 @@ class UserAccountManager(BaseUserManager):
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, email, name, password=None, **extra_fields):
+    def create_superuser(self, email, name, username, password=None, **extra_fields):
         user = self.create_user(
             email=email,
             name=name,
+            username=username,
             role=UserAccount.Role.SUPER_ADMIN,
             password=password,
             **extra_fields
@@ -47,6 +48,7 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
 
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=150)
+    username = models.CharField(max_length=150, null=True, blank=True)
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.FARM_WORKER)
     phone = models.CharField(max_length=20, blank=True, null=True)
     is_active = models.BooleanField(default=True)
@@ -1243,3 +1245,41 @@ class FarmVisitBooking(models.Model):
     def __str__(self):
         return f"{self.id} - {self.name}"
 
+
+# Plots
+class Plot(models.Model):
+    id = models.AutoField(primary_key=True)
+    plot = models.CharField(max_length=100)
+    area = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.id} - {self.plot}"
+
+
+# Plants Model
+class FarmPlants(models.Model):
+    id = models.AutoField(primary_key=True)
+    plant_name = models.CharField(max_length=100)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.id} - {self.plant_name}"
+
+
+# Planting model
+# class CropPlanting(models.Model):
+#     id = models.AutoField(primary_key=True)
+#     plot = models.ForeignKey(Plot, on_delete=models.CASCADE, related_name="plots")
+#     plant = models.ForeignKey(FarmPlants, on_delete=models.CASCADE, related_name="plants")
+#     planting_date = models.DateField()
+#     expected_harvest_date = models.DateField(null=True, blank=True)
+#     seed_quantity_used = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+#     seed_unit = models.CharField(max_length=20, default="kg")  # kg, grams, bags
+#     planting_notes = models.TextField(null=True, blank=True)
+#     added_on = models.DateTimeField(auto_now_add=True)
+#
+#     def __str__(self):
+#         return f"{self.plant.plant_name} on {self.plot.plot}"

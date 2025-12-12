@@ -12,7 +12,7 @@ from greenApp.models import TeamRoles, Farm, NotificationPreference, Notificatio
     Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Payment, Rabbit, Pond, CatfishBatch, \
     CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
     DairyGoatFeedingSchedule, DairyGoatFeedingRecord, BirdsFeedingSchedule, BirdsFeedingRecord, MpesaPayment, \
-    FarmVisitBooking
+    FarmVisitBooking, FarmPlants, Plot
 
 User = get_user_model()
 
@@ -22,7 +22,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'name', 'phone', 'role', 'password']
+        fields = ['id', 'email', 'name', 'username', 'phone', 'role', 'password']
         extra_kwargs = {
             'password': {'write_only': True}
         }
@@ -40,7 +40,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'name', 'phone', 'role', 'last_login']
+        fields = ['id', 'email', 'name', 'username','phone', 'role', 'last_login']
 
 
 class UserAccountSerializer(serializers.ModelSerializer):
@@ -704,4 +704,16 @@ class BookingsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = FarmVisitBooking
+        fields = "__all__"
+
+
+class FarmPlantsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FarmPlants
+        fields = "__all__"
+
+
+class PlotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Plot
         fields = "__all__"
