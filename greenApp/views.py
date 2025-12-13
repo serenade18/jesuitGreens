@@ -32,7 +32,7 @@ from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference
     EggSale, Customers, Orders, Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Rabbit, Pond, \
     CatfishBatch, CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
     DairyGoatFeedingSchedule, DairyGoatFeedingRecord, MpesaPayment, FarmVisitBooking, BirdsFeedingSchedule, \
-    BirdsFeedingRecord, FarmPlants, Plot
+    BirdsFeedingRecord, FarmPlants, Plot, CropPlanting
 
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 
@@ -47,7 +47,7 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     CatfishSaleSerializer, FeedingScheduleSerializer, FeedingRecordSerializer, DairyCattleFeedingScheduleSerializer, \
     DairyCattleFeedingRecordSerializer, DairyGoatFeedingScheduleSerializer, DairyGoatFeedingRecordSerializer, \
     MpesaPaymentSerializer, BookingsSerializer, BirdsFeedingScheduleSerializer, BirdsFeedingRecordSerializer, \
-    FarmPlantsSerializer, PlotSerializer
+    FarmPlantsSerializer, PlotSerializer, CropPlantingSerializer
 
 from .services import MpesaService
 
@@ -6431,7 +6431,7 @@ class PlotsViewSet(viewsets.ViewSet):
     # -------------------------------------
     def update(self, request, pk=None):
         try:
-            Plots = Plot.objects.get(id=pk)
+            plots = Plot.objects.get(id=pk)
             serializer = PlotSerializer(plots, data=request.data, context={'request': request})
 
             if serializer.is_valid():
@@ -6525,7 +6525,6 @@ class PlotsViewSet(viewsets.ViewSet):
                 "message": "An error occurred",
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
-
 
 
 # Plants viewset
@@ -6730,3 +6729,143 @@ class PlantsViewSet(viewsets.ViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
+# Crop planting
+class CropPlantingViewSet(viewsets.ModelViewSet):
+    queryset = CropPlanting.objects.select_related("plot", "plant").order_by("-id")
+    serializer_class = CropPlantingSerializer
+
+    permission_classes_by_action = {
+        "create": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "list": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "retrieve": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "update": [IsAdminRole, IsFarmManagerRole],
+        "partial_update": [IsAdminRole, IsFarmManagerRole],
+        "destroy": [IsAdminRole, IsFarmManagerRole],
+        "default": [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action["default"]
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    # -------------------------
+    # LIST (supports ?plant=ID)
+    # -------------------------
+    def list(self, request):
+        try:
+            queryset = self.get_queryset()
+
+            plant_id = request.query_params.get("plant")
+            if plant_id:
+                queryset = queryset.filter(plant_id=plant_id)
+
+            serializer = self.get_serializer(queryset, many=True)
+            return Response({
+                "error": False,
+                "message": "Crop plantings list",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # CREATE
+    # -------------------------
+    def create(self, request):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Crop planting created successfully",
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "details": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # RETRIEVE
+    # -------------------------
+    def retrieve(self, request, pk=None):
+        planting = get_object_or_404(CropPlanting, pk=pk)
+        serializer = self.get_serializer(planting)
+        return Response({
+            "error": False,
+            "message": "Crop planting retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    # -------------------------
+    # UPDATE / PARTIAL UPDATE
+    # -------------------------
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        pk = kwargs.get("pk")
+
+        try:
+            planting = get_object_or_404(CropPlanting, pk=pk)
+            serializer = self.get_serializer(
+                planting,
+                data=request.data,
+                partial=partial
+            )
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Crop planting updated successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "error": True,
+                "message": "Validation failed",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # DELETE
+    # -------------------------
+    def destroy(self, request, pk=None):
+        try:
+            planting = get_object_or_404(CropPlanting, pk=pk)
+            planting.delete()
+            return Response({
+                "error": False,
+                "message": "Crop planting deleted successfully"
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)

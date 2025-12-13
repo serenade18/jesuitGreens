@@ -14,7 +14,7 @@ from greenApp.models import TeamRoles, Farm, NotificationPreference, Notificatio
     Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Payment, Rabbit, Pond, CatfishBatch, \
     CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
     DairyGoatFeedingSchedule, DairyGoatFeedingRecord, BirdsFeedingSchedule, BirdsFeedingRecord, MpesaPayment, \
-    FarmVisitBooking, FarmPlants, Plot
+    FarmVisitBooking, FarmPlants, Plot, CropPlanting
 
 User = get_user_model()
 
@@ -757,3 +757,13 @@ class PlotSerializer(serializers.ModelSerializer):
     class Meta:
         model = Plot
         fields = "__all__"
+
+
+class CropPlantingSerializer(serializers.ModelSerializer):
+    plot_name = serializers.CharField(source="plot.plot", read_only=True)
+    plant_name = serializers.CharField(source="plant.plant_name", read_only=True)
+
+    class Meta:
+        model = CropPlanting
+        fields = "__all__"
+

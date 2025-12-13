@@ -1270,16 +1270,16 @@ class FarmPlants(models.Model):
 
 
 # Planting model
-# class CropPlanting(models.Model):
-#     id = models.AutoField(primary_key=True)
-#     plot = models.ForeignKey(Plot, on_delete=models.CASCADE, related_name="plots")
-#     plant = models.ForeignKey(FarmPlants, on_delete=models.CASCADE, related_name="plants")
-#     planting_date = models.DateField()
-#     expected_harvest_date = models.DateField(null=True, blank=True)
-#     seed_quantity_used = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-#     seed_unit = models.CharField(max_length=20, default="kg")  # kg, grams, bags
-#     planting_notes = models.TextField(null=True, blank=True)
-#     added_on = models.DateTimeField(auto_now_add=True)
-#
-#     def __str__(self):
-#         return f"{self.plant.plant_name} on {self.plot.plot}"
+class CropPlanting(models.Model):
+    id = models.AutoField(primary_key=True)
+    plot = models.ForeignKey(Plot, on_delete=models.CASCADE, related_name="plots")
+    plant = models.ForeignKey(FarmPlants, on_delete=models.CASCADE, related_name="plants")
+    planting_date = models.DateField()
+    expected_harvest_date = models.DateField(null=True, blank=True)
+    seed_quantity_used = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    seed_unit = models.CharField(max_length=20, default="kg")  # kg, grams, bags
+    planting_notes = models.TextField(null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.plant.plant_name} on {self.plot.plot}"
