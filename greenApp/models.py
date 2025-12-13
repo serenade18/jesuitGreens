@@ -1271,6 +1271,12 @@ class FarmPlants(models.Model):
 
 # Planting model
 class CropPlanting(models.Model):
+    STATUS_CHOICES = (
+        ("planted", "Planted"),
+        ("growing", "Growing"),
+        ("harvested", "Harvested"),
+    )
+
     id = models.AutoField(primary_key=True)
     plot = models.ForeignKey(Plot, on_delete=models.CASCADE, related_name="plots")
     plant = models.ForeignKey(FarmPlants, on_delete=models.CASCADE, related_name="plants")
@@ -1279,7 +1285,70 @@ class CropPlanting(models.Model):
     seed_quantity_used = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     seed_unit = models.CharField(max_length=20, default="kg")  # kg, grams, bags
     planting_notes = models.TextField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="planted"
+    )
     added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
 
     def __str__(self):
         return f"{self.plant.plant_name} on {self.plot.plot}"
+
+
+# Harvest Model
+class CropHarvest(models.Model):
+    id = models.AutoField(primary_key=True)
+    planting = models.ForeignKey(CropPlanting, on_delete=models.CASCADE, related_name="harvests")
+    harvest_date = models.DateField()
+    quantity_harvested = models.DecimalField(max_digits=10, decimal_places=2)
+    unit = models.CharField(max_length=20, default="kg")
+    quality_grade = models.CharField(max_length=50, null=True, blank=True)  # Grade A, B, etc.
+    notes = models.TextField(null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+
+# Irrigation schedule
+class IrrigationSchedule(models.Model):
+    id = models.AutoField(primary_key=True)
+    planting = models.ForeignKey(CropPlanting, on_delete=models.CASCADE, related_name="irrigations")
+    irrigation_date = models.DateField()
+    water_volume = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    unit = models.CharField(max_length=20, default="liters")
+    method = models.CharField(max_length=50, default="manual")  # drip, overhead, etc.
+    notes = models.TextField(null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+
+# Fertilizer model
+class FertilizerApplication(models.Model):
+    id = models.AutoField(primary_key=True)
+    planting = models.ForeignKey(CropPlanting, on_delete=models.CASCADE, related_name="fertilizer_applications")
+    fertilizer_name = models.CharField(max_length=100)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2)  # amount applied
+    unit = models.CharField(max_length=20, default="kg")
+    application_date = models.DateField()
+    notes = models.TextField(null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.fertilizer_name} - {self.planting}"
+
+
+# Pesticide model
+class PesticideApplication(models.Model):
+    id = models.AutoField(primary_key=True)
+    planting = models.ForeignKey(CropPlanting, on_delete=models.CASCADE, related_name="pesticide_applications")
+    chemical_name = models.CharField(max_length=100)
+    pest_or_disease = models.CharField(max_length=100)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    unit = models.CharField(max_length=20, default="liters")
+    application_date = models.DateField()
+    notes = models.TextField(null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+

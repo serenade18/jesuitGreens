@@ -14,7 +14,8 @@ from greenApp.models import TeamRoles, Farm, NotificationPreference, Notificatio
     Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Payment, Rabbit, Pond, CatfishBatch, \
     CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
     DairyGoatFeedingSchedule, DairyGoatFeedingRecord, BirdsFeedingSchedule, BirdsFeedingRecord, MpesaPayment, \
-    FarmVisitBooking, FarmPlants, Plot, CropPlanting
+    FarmVisitBooking, FarmPlants, Plot, CropPlanting, CropHarvest, IrrigationSchedule, FertilizerApplication, \
+    PesticideApplication
 
 User = get_user_model()
 
@@ -762,8 +763,32 @@ class PlotSerializer(serializers.ModelSerializer):
 class CropPlantingSerializer(serializers.ModelSerializer):
     plot_name = serializers.CharField(source="plot.plot", read_only=True)
     plant_name = serializers.CharField(source="plant.plant_name", read_only=True)
+    plot_area = serializers.DecimalField(source="plot.area", max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = CropPlanting
         fields = "__all__"
 
+
+class CropHarvestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CropHarvest
+        fields = "__all__"
+
+
+class IrrigationScheduleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IrrigationSchedule
+        fields = "__all__"
+
+
+class FertilizerApplicationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FertilizerApplication
+        fields = "__all__"
+
+
+class PesticideApplicationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PesticideApplication
+        fields = "__all__"

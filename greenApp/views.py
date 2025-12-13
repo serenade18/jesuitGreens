@@ -32,7 +32,7 @@ from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference
     EggSale, Customers, Orders, Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Rabbit, Pond, \
     CatfishBatch, CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
     DairyGoatFeedingSchedule, DairyGoatFeedingRecord, MpesaPayment, FarmVisitBooking, BirdsFeedingSchedule, \
-    BirdsFeedingRecord, FarmPlants, Plot, CropPlanting
+    BirdsFeedingRecord, FarmPlants, Plot, CropPlanting, CropHarvest
 
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 
@@ -47,7 +47,7 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     CatfishSaleSerializer, FeedingScheduleSerializer, FeedingRecordSerializer, DairyCattleFeedingScheduleSerializer, \
     DairyCattleFeedingRecordSerializer, DairyGoatFeedingScheduleSerializer, DairyGoatFeedingRecordSerializer, \
     MpesaPaymentSerializer, BookingsSerializer, BirdsFeedingScheduleSerializer, BirdsFeedingRecordSerializer, \
-    FarmPlantsSerializer, PlotSerializer, CropPlantingSerializer
+    FarmPlantsSerializer, PlotSerializer, CropPlantingSerializer, CropHarvestSerializer
 
 from .services import MpesaService
 
@@ -6861,6 +6861,147 @@ class CropPlantingViewSet(viewsets.ModelViewSet):
             return Response({
                 "error": False,
                 "message": "Crop planting deleted successfully"
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Crop harvest
+class CropHarvestViewSet(viewsets.ModelViewSet):
+    queryset = CropHarvest.objects.select_related("planting").order_by("-id")
+    serializer_class = CropHarvestSerializer
+
+    permission_classes_by_action = {
+        "create": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "list": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "retrieve": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "update": [IsAdminRole, IsFarmManagerRole],
+        "partial_update": [IsAdminRole, IsFarmManagerRole],
+        "destroy": [IsAdminRole, IsFarmManagerRole],
+        "default": [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action["default"]
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    # -------------------------
+    # LIST (supports ?planting=ID)
+    # -------------------------
+    def list(self, request):
+        try:
+            queryset = self.get_queryset()
+            planting_id = request.query_params.get("planting")
+            if planting_id:
+                queryset = queryset.filter(planting_id=planting_id)
+
+            serializer = self.get_serializer(queryset, many=True)
+            return Response({
+                "error": False,
+                "message": "Crop harvest list",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # CREATE
+    # -------------------------
+    def create(self, request):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Crop harvest created successfully",
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "details": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # RETRIEVE
+    # -------------------------
+    def retrieve(self, request, pk=None):
+        harvest = get_object_or_404(CropHarvest, pk=pk)
+        serializer = self.get_serializer(harvest)
+        return Response({
+            "error": False,
+            "message": "Crop harvest retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    # -------------------------
+    # UPDATE / PARTIAL UPDATE
+    # -------------------------
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        pk = kwargs.get("pk")
+
+        try:
+            harvest = get_object_or_404(CropHarvest, pk=pk)
+            serializer = self.get_serializer(
+                harvest,
+                data=request.data,
+                partial=partial
+            )
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Crop harvest updated successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "error": True,
+                "message": "Validation failed",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # DELETE
+    # -------------------------
+    def destroy(self, request, pk=None):
+        try:
+            harvest = get_object_or_404(CropHarvest, pk=pk)
+            harvest.delete()
+            return Response({
+                "error": False,
+                "message": "Crop harvest deleted successfully"
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
