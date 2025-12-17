@@ -783,6 +783,10 @@ class IrrigationScheduleSerializer(serializers.ModelSerializer):
 
 
 class FertilizerApplicationSerializer(serializers.ModelSerializer):
+    planting_name = serializers.CharField(source="planting.plant.plant_name", read_only=True)
+    plot_name = serializers.CharField(source="planting.plot.plot", read_only=True)
+    plant_name = serializers.CharField(source="planting.plant.plant_name", read_only=True)
+
     class Meta:
         model = FertilizerApplication
         fields = "__all__"

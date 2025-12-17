@@ -32,7 +32,8 @@ from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference
     EggSale, Customers, Orders, Expense, RecurringExpense, Tasks, BillPayment, Procurement, Inventory, Rabbit, Pond, \
     CatfishBatch, CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
     DairyGoatFeedingSchedule, DairyGoatFeedingRecord, MpesaPayment, FarmVisitBooking, BirdsFeedingSchedule, \
-    BirdsFeedingRecord, FarmPlants, Plot, CropPlanting, CropHarvest
+    BirdsFeedingRecord, FarmPlants, Plot, CropPlanting, CropHarvest, IrrigationSchedule, FertilizerApplication, \
+    PesticideApplication
 
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 
@@ -47,7 +48,8 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     CatfishSaleSerializer, FeedingScheduleSerializer, FeedingRecordSerializer, DairyCattleFeedingScheduleSerializer, \
     DairyCattleFeedingRecordSerializer, DairyGoatFeedingScheduleSerializer, DairyGoatFeedingRecordSerializer, \
     MpesaPaymentSerializer, BookingsSerializer, BirdsFeedingScheduleSerializer, BirdsFeedingRecordSerializer, \
-    FarmPlantsSerializer, PlotSerializer, CropPlantingSerializer, CropHarvestSerializer
+    FarmPlantsSerializer, PlotSerializer, CropPlantingSerializer, CropHarvestSerializer, IrrigationScheduleSerializer, \
+    FertilizerApplicationSerializer, PesticideApplicationSerializer
 
 from .services import MpesaService
 
@@ -6729,7 +6731,7 @@ class PlantsViewSet(viewsets.ViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
-# Crop planting
+# Crop planting viewSet
 class CropPlantingViewSet(viewsets.ModelViewSet):
     queryset = CropPlanting.objects.select_related("plot", "plant").order_by("-id")
     serializer_class = CropPlantingSerializer
@@ -6871,7 +6873,7 @@ class CropPlantingViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
-# Crop harvest
+# Crop harvest viewSet
 class CropHarvestViewSet(viewsets.ModelViewSet):
     queryset = CropHarvest.objects.select_related("planting").order_by("-id")
     serializer_class = CropHarvestSerializer
@@ -7010,3 +7012,418 @@ class CropHarvestViewSet(viewsets.ModelViewSet):
                 "message": "An error occurred",
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Irrigation viewSet
+class IrrigationScheduleViewSet(viewsets.ModelViewSet):
+    queryset = IrrigationSchedule.objects.order_by("-id")
+    serializer_class = IrrigationScheduleSerializer
+
+    permission_classes_by_action = {
+        "create": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "list": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "retrieve": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "update": [IsAdminRole, IsFarmManagerRole],
+        "partial_update": [IsAdminRole, IsFarmManagerRole],
+        "destroy": [IsAdminRole, IsFarmManagerRole],
+        "default": [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action["default"]
+        )
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return any(p().has_permission(request, view) for p in perms)
+
+        return [AnyPermission()]
+
+    # -------------------------
+    # LIST (supports ?planting=ID)
+    # -------------------------
+    def list(self, request):
+        try:
+            queryset = self.get_queryset()
+            planting_id = request.query_params.get("planting")
+            if planting_id:
+                queryset = queryset.filter(planting_id=planting_id)
+
+            serializer = self.get_serializer(queryset, many=True)
+            return Response({
+                "error": False,
+                "message": "Irrigation schedule list",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # CREATE
+    # -------------------------
+    def create(self, request):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Irrigation schedule created successfully",
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "details": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # RETRIEVE
+    # -------------------------
+    def retrieve(self, request, pk=None):
+        irrigation = get_object_or_404(IrrigationSchedule, pk=pk)
+        serializer = self.get_serializer(irrigation)
+        return Response({
+            "error": False,
+            "message": "Irrigation schedule retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    # -------------------------
+    # UPDATE / PARTIAL UPDATE
+    # -------------------------
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        pk = kwargs.get("pk")
+
+        try:
+            irrigation = get_object_or_404(IrrigationSchedule, pk=pk)
+            serializer = self.get_serializer(
+                irrigation,
+                data=request.data,
+                partial=partial
+            )
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Irrigation schedule updated successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "error": True,
+                "message": "Validation failed",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # DELETE
+    # -------------------------
+    def destroy(self, request, pk=None):
+        try:
+            irrigation = get_object_or_404(IrrigationSchedule, pk=pk)
+            irrigation.delete()
+            return Response({
+                "error": False,
+                "message": "Irrigation schedule deleted successfully"
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Fertilizer viewSet
+class FertilizerApplicationViewSet(viewsets.ModelViewSet):
+    queryset = FertilizerApplication.objects.select_related("planting").order_by("-id")
+    serializer_class = FertilizerApplicationSerializer
+
+    permission_classes_by_action = {
+        "create": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "list": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "retrieve": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "update": [IsAdminRole, IsFarmManagerRole],
+        "partial_update": [IsAdminRole, IsFarmManagerRole],
+        "destroy": [IsAdminRole, IsFarmManagerRole],
+        "default": [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action["default"]
+        )
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return any(p().has_permission(request, view) for p in perms)
+
+        return [AnyPermission()]
+
+    # -------------------------
+    # LIST (supports ?planting=ID)
+    # -------------------------
+    def list(self, request):
+        try:
+            queryset = self.get_queryset()
+            planting_id = request.query_params.get("planting")
+            if planting_id:
+                queryset = queryset.filter(planting_id=planting_id)
+
+            serializer = self.get_serializer(queryset, many=True)
+            return Response({
+                "error": False,
+                "message": "Fertilizer application list",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # CREATE
+    # -------------------------
+    def create(self, request):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Fertilizer application created successfully",
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "details": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # RETRIEVE
+    # -------------------------
+    def retrieve(self, request, pk=None):
+        application = get_object_or_404(FertilizerApplication, pk=pk)
+        serializer = self.get_serializer(application)
+        return Response({
+            "error": False,
+            "message": "Fertilizer application retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    # -------------------------
+    # UPDATE / PARTIAL UPDATE
+    # -------------------------
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        pk = kwargs.get("pk")
+
+        try:
+            application = get_object_or_404(FertilizerApplication, pk=pk)
+            serializer = self.get_serializer(
+                application,
+                data=request.data,
+                partial=partial
+            )
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Fertilizer application updated successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "error": True,
+                "message": "Validation failed",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # DELETE
+    # -------------------------
+    def destroy(self, request, pk=None):
+        try:
+            application = get_object_or_404(FertilizerApplication, pk=pk)
+            application.delete()
+            return Response({
+                "error": False,
+                "message": "Fertilizer application deleted successfully"
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Pesticide viewSet
+class PesticideApplicationViewSet(viewsets.ModelViewSet):
+    queryset = PesticideApplication.objects.select_related("planting").order_by("-id")
+    serializer_class = PesticideApplicationSerializer
+
+    permission_classes_by_action = {
+        "create": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "list": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "retrieve": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "update": [IsAdminRole, IsFarmManagerRole],
+        "partial_update": [IsAdminRole, IsFarmManagerRole],
+        "destroy": [IsAdminRole, IsFarmManagerRole],
+        "default": [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action["default"]
+        )
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return any(p().has_permission(request, view) for p in perms)
+
+        return [AnyPermission()]
+
+    # -------------------------
+    # LIST (supports ?planting=ID)
+    # -------------------------
+    def list(self, request):
+        try:
+            queryset = self.get_queryset()
+            planting_id = request.query_params.get("planting")
+            if planting_id:
+                queryset = queryset.filter(planting_id=planting_id)
+
+            serializer = self.get_serializer(queryset, many=True)
+            return Response({
+                "error": False,
+                "message": "Pesticide application list",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # CREATE
+    # -------------------------
+    def create(self, request):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Pesticide application created successfully",
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "details": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # RETRIEVE
+    # -------------------------
+    def retrieve(self, request, pk=None):
+        application = get_object_or_404(PesticideApplication, pk=pk)
+        serializer = self.get_serializer(application)
+        return Response({
+            "error": False,
+            "message": "Pesticide application retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    # -------------------------
+    # UPDATE / PARTIAL UPDATE
+    # -------------------------
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        pk = kwargs.get("pk")
+
+        try:
+            application = get_object_or_404(PesticideApplication, pk=pk)
+            serializer = self.get_serializer(
+                application,
+                data=request.data,
+                partial=partial
+            )
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Pesticide application updated successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "error": True,
+                "message": "Validation failed",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # DELETE
+    # -------------------------
+    def destroy(self, request, pk=None):
+        try:
+            application = get_object_or_404(PesticideApplication, pk=pk)
+            application.delete()
+            return Response({
+                "error": False,
+                "message": "Pesticide application deleted successfully"
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
