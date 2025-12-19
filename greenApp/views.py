@@ -33,7 +33,7 @@ from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference
     CatfishBatch, CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
     DairyGoatFeedingSchedule, DairyGoatFeedingRecord, MpesaPayment, FarmVisitBooking, BirdsFeedingSchedule, \
     BirdsFeedingRecord, FarmPlants, Plot, CropPlanting, CropHarvest, IrrigationSchedule, FertilizerApplication, \
-    PesticideApplication
+    PesticideApplication, Payment
 
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 
@@ -49,7 +49,7 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     DairyCattleFeedingRecordSerializer, DairyGoatFeedingScheduleSerializer, DairyGoatFeedingRecordSerializer, \
     MpesaPaymentSerializer, BookingsSerializer, BirdsFeedingScheduleSerializer, BirdsFeedingRecordSerializer, \
     FarmPlantsSerializer, PlotSerializer, CropPlantingSerializer, CropHarvestSerializer, IrrigationScheduleSerializer, \
-    FertilizerApplicationSerializer, PesticideApplicationSerializer
+    FertilizerApplicationSerializer, PesticideApplicationSerializer, PaymentSerializer
 
 from .services import MpesaService
 
@@ -3676,9 +3676,27 @@ class CustomerViewSet(viewsets.ViewSet):
             sale_details_serializer = OrdersSerializer(sale_details, many=True)
             serializer_data["sales"] = sale_details_serializer.data
 
+            payment_details = Payment.objects.filter(customer=serializer_data["id"]).order_by('-id')
+            payment_details_Serializer = PaymentSerializer(payment_details, many=True)
+            serializer_data["payments"] = payment_details_Serializer.data
+
+            # Aggregate orders
+            totals = Orders.objects.filter(customer_id=pk).aggregate(
+                total_amount=Sum('total_amount')
+            )
+            amount = totals['total_amount']
+
+            # Aggregate payments
+            payment_totals = Payment.objects.filter(customer_id=pk).aggregate(
+                total_payment=Sum('payment_amount')
+            )
+            t_amount = payment_totals['total_payment'] or 0
+            balance = amount - t_amount
+
             return Response({
                 "error": False,
                 "message": "Customer Retrieved",
+                "balance": balance,
                 "data": serializer_data
             }, status=status.HTTP_200_OK)
 
@@ -7418,6 +7436,218 @@ class PesticideApplicationViewSet(viewsets.ModelViewSet):
             return Response({
                 "error": False,
                 "message": "Pesticide application deleted successfully"
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Payment viewSet
+class PaymentViewSet(viewsets.ModelViewSet):
+    queryset = Payment.objects.select_related("order", "customer").order_by("-id")
+    serializer_class = PaymentSerializer
+
+    permission_classes_by_action = {
+        "create": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "list": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "retrieve": [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        "update": [IsAdminRole, IsFarmManagerRole],
+        "partial_update": [IsAdminRole, IsFarmManagerRole],
+        "destroy": [IsAdminRole, IsFarmManagerRole],
+        "default": [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action["default"]
+        )
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return any(p().has_permission(request, view) for p in perms)
+
+        return [AnyPermission()]
+
+
+    # -------------------------
+    # HELPER FUNCTION
+    # -------------------------
+    def update_order_status(self, order):
+        total_paid = (
+                Payment.objects
+                .filter(order=order)
+                .aggregate(total=models.Sum("payment_amount"))
+                .get("total") or 0
+        )
+
+        if total_paid >= order.total_amount:
+            order.status = "paid"
+        elif total_paid > 0:
+            order.status = "partial"
+        else:
+            order.status = "pending"
+
+        order.save(update_fields=["status"])
+
+    # -------------------------
+    # LIST (supports ?order=ID or ?customer=ID)
+    # -------------------------
+    def list(self, request):
+        try:
+            queryset = self.get_queryset()
+
+            order_id = request.query_params.get("order")
+            customer_id = request.query_params.get("customer")
+
+            if order_id:
+                queryset = queryset.filter(order_id=order_id)
+
+            if customer_id:
+                queryset = queryset.filter(customer_id=customer_id)
+
+            serializer = self.get_serializer(queryset, many=True)
+
+            return Response({
+                "error": False,
+                "message": "Payment list",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # CREATE
+    # -------------------------
+    def create(self, request):
+        try:
+            order_id = request.data.get("order") or request.data.get("order_id")
+            payment_amount = request.data.get("payment_amount")
+
+            if not order_id or payment_amount is None:
+                return Response({
+                    "error": True,
+                    "message": "order and payment_amount are required",
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            order = get_object_or_404(
+                Orders.objects.select_related("customer"),
+                id=order_id
+            )
+
+            payment_amount = float(payment_amount)
+
+            payment = Payment.objects.create(
+                order=order,
+                customer=order.customer,
+                order_amount=order.total_amount,
+                payment_amount=payment_amount,
+                notes=request.data.get("notes"),
+                status="pending",  # temporary
+            )
+
+            # Update order status based on ALL payments
+            self.update_order_status(order)
+
+            # Sync payment status with order
+            payment.status = order.status
+            payment.save(update_fields=["status"])
+
+            serializer = self.get_serializer(payment)
+
+            return Response({
+                "error": False,
+                "message": "Payment created successfully",
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # RETRIEVE
+    # -------------------------
+    def retrieve(self, request, pk=None):
+        payment = get_object_or_404(Payment, pk=pk)
+        serializer = self.get_serializer(payment)
+
+        return Response({
+            "error": False,
+            "message": "Payment retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    # -------------------------
+    # UPDATE / PARTIAL UPDATE
+    # -------------------------
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        pk = kwargs.get("pk")
+
+        try:
+            payment = get_object_or_404(Payment, pk=pk)
+            serializer = self.get_serializer(
+                payment,
+                data=request.data,
+                partial=partial
+            )
+
+            if serializer.is_valid():
+                updated_payment = serializer.save()
+
+                # Recalculate order status
+                self.update_order_status(updated_payment.order)
+
+                # Sync payment status to order status
+                updated_payment.status = updated_payment.order.status
+                updated_payment.save(update_fields=["status"])
+
+                return Response({
+                    "error": False,
+                    "message": "Payment updated successfully",
+                    "data": self.get_serializer(updated_payment).data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "error": True,
+                "message": "Validation failed",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # DELETE
+    # -------------------------
+    def destroy(self, request, pk=None):
+        try:
+            payment = get_object_or_404(Payment, pk=pk)
+            order = payment.order
+            payment.delete()
+
+            self.update_order_status(order)
+
+            return Response({
+                "error": False,
+                "message": "Payment deleted successfully"
             }, status=status.HTTP_200_OK)
 
         except Exception as e:

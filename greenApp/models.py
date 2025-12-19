@@ -968,6 +968,12 @@ class Inventory(models.Model):
 
 # Payment model
 class Payment(models.Model):
+    STATUS = [
+        ("paid", "Paid"),
+        ("partial", "Partial"),
+        ("pending", "Pending"),
+    ]
+
     id = models.AutoField(primary_key=True)
     order = models.ForeignKey(
         'Orders',  # Link to your Orders model
@@ -982,6 +988,7 @@ class Payment(models.Model):
     order_amount = models.FloatField()  # Total amount of the order
     payment_amount = models.FloatField()  # How much was paid
     notes = models.TextField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS, default="pending")
     added_on = models.DateTimeField(auto_now_add=True)
     objects = models.Manager()
 
