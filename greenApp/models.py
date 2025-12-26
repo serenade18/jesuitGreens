@@ -422,7 +422,7 @@ class PoultryBatch(models.Model):
     age_in_days = models.PositiveIntegerField()
     number_of_chicks = models.PositiveIntegerField()
     vaccinated = models.BooleanField(default=False)
-    notes = models.TextField(blank=True)
+    notes = models.TextField(blank=True, null=True)
     added_on = models.DateTimeField(auto_now_add=True)
     objects = models.Manager()
 
@@ -501,7 +501,7 @@ class CalvingRecord(models.Model):
         return f"{self.animal.id} — {self.calf_name} ({self.calving_date})"
 
 
-# Medication model
+# Dairy cattle Medication model
 class Medication(models.Model):
     TREATMENT_TYPES = (
         ("antibiotic", "Antibiotic"),
@@ -1359,3 +1359,33 @@ class PesticideApplication(models.Model):
     added_on = models.DateTimeField(auto_now_add=True)
     objects = models.Manager()
 
+
+# Dairy cattle vaccination
+class VaccinationRecord(models.Model):
+    ROUTE_CHOICES = (
+        ("SC", "Subcutaneous"),
+        ("IM", "Intramuscular"),
+        ("IN", "Intranasal"),
+    )
+
+    animal = models.ForeignKey(
+        "DairyCattle",
+        on_delete=models.CASCADE,
+        related_name="vaccinations"
+    )
+    date_administered = models.DateField()
+    vaccine_name = models.CharField(max_length=255)
+    dosage = models.CharField(max_length=150)
+    route = models.CharField(
+        max_length=2,
+        choices=ROUTE_CHOICES
+    )
+    administered_by = models.CharField(max_length=100)
+    milk_withdrawal_days = models.PositiveIntegerField()
+    meat_withdrawal_days = models.PositiveIntegerField()
+    next_booster_date = models.DateField()
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.animal} - {self.vaccine_name}"

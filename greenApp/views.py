@@ -33,7 +33,7 @@ from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference
     CatfishBatch, CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
     DairyGoatFeedingSchedule, DairyGoatFeedingRecord, MpesaPayment, FarmVisitBooking, BirdsFeedingSchedule, \
     BirdsFeedingRecord, FarmPlants, Plot, CropPlanting, CropHarvest, IrrigationSchedule, FertilizerApplication, \
-    PesticideApplication, Payment
+    PesticideApplication, Payment, VaccinationRecord
 
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 
@@ -49,7 +49,7 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     DairyCattleFeedingRecordSerializer, DairyGoatFeedingScheduleSerializer, DairyGoatFeedingRecordSerializer, \
     MpesaPaymentSerializer, BookingsSerializer, BirdsFeedingScheduleSerializer, BirdsFeedingRecordSerializer, \
     FarmPlantsSerializer, PlotSerializer, CropPlantingSerializer, CropHarvestSerializer, IrrigationScheduleSerializer, \
-    FertilizerApplicationSerializer, PesticideApplicationSerializer, PaymentSerializer
+    FertilizerApplicationSerializer, PesticideApplicationSerializer, PaymentSerializer, VaccinationRecordSerializer
 
 from .services import MpesaService
 
@@ -7657,3 +7657,184 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
 
+
+# Vaccination viewSet
+class VaccinationRecordViewSet(viewsets.ViewSet):
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'destroy': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action['default']
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def list(self, request):
+        try:
+            records = VaccinationRecord.objects.all().order_by('-id')
+            serializer = VaccinationRecordSerializer(records, many=True)
+
+            return Response({
+                "error": False,
+                "message": "Vaccination records retrieved",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request):
+        serializer = VaccinationRecordSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response({
+                "error": True,
+                "message": "Invalid data",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        record = serializer.save()
+
+        return Response({
+            "error": False,
+            "message": "Vaccination record created successfully",
+            "data": VaccinationRecordSerializer(record).data
+        }, status=status.HTTP_201_CREATED)
+
+    def retrieve(self, request, pk=None):
+        try:
+            record = VaccinationRecord.objects.get(pk=pk)
+            serializer = VaccinationRecordSerializer(record)
+
+            return Response({
+                "error": False,
+                "message": "Vaccination record retrieved",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except VaccinationRecord.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Vaccination record not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        try:
+            record = VaccinationRecord.objects.get(pk=pk)
+            serializer = VaccinationRecordSerializer(record, data=request.data)
+
+            if not serializer.is_valid():
+                return Response({
+                    "error": True,
+                    "message": "Invalid data",
+                    "details": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Vaccination record updated successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except VaccinationRecord.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Vaccination record not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def partial_update(self, request, pk=None):
+        try:
+            record = VaccinationRecord.objects.get(pk=pk)
+            serializer = VaccinationRecordSerializer(
+                record,
+                data=request.data,
+                partial=True
+            )
+
+            if not serializer.is_valid():
+                return Response({
+                    "error": True,
+                    "message": "Invalid data",
+                    "details": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Vaccination record partially updated",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except VaccinationRecord.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Vaccination record not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        try:
+            record = VaccinationRecord.objects.get(pk=pk)
+            record.delete()
+
+            return Response({
+                "error": False,
+                "message": "Vaccination record deleted successfully",
+                "data": []
+            }, status=status.HTTP_200_OK)
+
+        except VaccinationRecord.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Vaccination record not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)

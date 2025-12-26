@@ -15,7 +15,7 @@ from greenApp.models import TeamRoles, Farm, NotificationPreference, Notificatio
     CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
     DairyGoatFeedingSchedule, DairyGoatFeedingRecord, BirdsFeedingSchedule, BirdsFeedingRecord, MpesaPayment, \
     FarmVisitBooking, FarmPlants, Plot, CropPlanting, CropHarvest, IrrigationSchedule, FertilizerApplication, \
-    PesticideApplication
+    PesticideApplication, VaccinationRecord
 
 User = get_user_model()
 
@@ -224,9 +224,14 @@ class CalvingRecordSerializer(serializers.ModelSerializer):
 
 
 class MedicationSerializer(serializers.ModelSerializer):
+    animal_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Medication
         fields = "__all__"
+
+    def get_animal_name(self, obj):
+        return obj.animal.animal_name
 
 
 class EggCollectionSerializer(serializers.ModelSerializer):
@@ -796,3 +801,14 @@ class PesticideApplicationSerializer(serializers.ModelSerializer):
     class Meta:
         model = PesticideApplication
         fields = "__all__"
+
+
+class VaccinationRecordSerializer(serializers.ModelSerializer):
+    animal_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VaccinationRecord
+        fields = "__all__"
+
+    def get_animal_name(self, obj):
+        return obj.animal.animal_name
