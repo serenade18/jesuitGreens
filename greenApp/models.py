@@ -1150,53 +1150,6 @@ class FeedingRecord(models.Model):
         return f"Feeding on {self.date} for Batch {self.schedule.batch.id}"
 
 
-# All Orders
-class Orders(models.Model):
-    PRODUCT_TYPES = [
-        ("cow_milk", "Cow Milk"),
-        ("goat_milk", "Goat Milk"),
-        ("eggs", "Eggs"),
-        ("catfish", "Catfish"),
-    ]
-
-    STATUS = [
-        ("paid", "Paid"),
-        ("pending", "Pending"),
-        ("partial", "Partial"),
-    ]
-
-    CATEGORY = [
-        ("livestock", "Livestock"),
-        ("dairy", "Dairy"),
-        ("poultry", "Poultry"),
-        ("crop", "Crop"),
-        ("fish", "Fish"),
-    ]
-
-    id = models.AutoField(primary_key=True)
-    customer = models.ForeignKey(
-        Customers,
-        on_delete=models.CASCADE,
-        related_name="orders"
-    )
-    product_type = models.CharField(max_length=20, choices=PRODUCT_TYPES)
-    category = models.CharField(max_length=20, choices=CATEGORY, null=True, blank=True)
-    quantity = models.FloatField(null=True, blank=True)
-    unit_price = models.FloatField(null=True, blank=True)
-    egg_sale = models.ForeignKey(EggSale, on_delete=models.CASCADE, related_name="egg_sales", null=True, blank=True)
-    milk_sale = models.ForeignKey(MilkSale, on_delete=models.CASCADE, related_name="milk_sales", null=True, blank=True)
-    goatmilk_sale = models.ForeignKey(GoatMilkSale, on_delete=models.CASCADE, related_name="goatmilk_sales", null=True, blank=True)
-    catfish_sale = models.ForeignKey(CatfishSale, on_delete=models.CASCADE, related_name="catfish_sales", null=True, blank=True)
-    total_amount = models.FloatField()
-    status = models.CharField(max_length=20, choices=STATUS)
-    notes = models.TextField(null=True, blank=True)
-    added_on = models.DateTimeField(auto_now_add=True)
-    objects = models.Manager()
-
-    def __str__(self):
-        return f"{self.product_type} sale #{self.id} - {self.customer.name}"
-
-
 # Mpesa Payment
 class MpesaPayment(models.Model):
     checkout_request_id = models.CharField(max_length=255, unique=True)
@@ -1274,6 +1227,27 @@ class FarmPlants(models.Model):
 
     def __str__(self):
         return f"{self.id} - {self.plant_name}"
+
+
+# Crop sales Model
+class CropSale(models.Model):
+    STATUS = [
+        ('paid', 'Paid'),
+        ('pending', 'Pending'),
+        ('partial', 'Partial')
+    ]
+
+    id = models.AutoField(primary_key=True)
+    customer = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name="crop_sales")
+    quantity = models.FloatField()
+    price_per_kilo = models.FloatField()
+    total_amount = models.FloatField()
+    status = models.CharField(max_length=20, choices=STATUS)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"Sale #{self.id} - {self.customer.name}"
 
 
 # Planting model
@@ -1389,3 +1363,52 @@ class VaccinationRecord(models.Model):
 
     def __str__(self):
         return f"{self.animal} - {self.vaccine_name}"
+
+
+# All Orders
+class Orders(models.Model):
+    PRODUCT_TYPES = [
+        ("cow_milk", "Cow Milk"),
+        ("goat_milk", "Goat Milk"),
+        ("eggs", "Eggs"),
+        ("catfish", "Catfish"),
+        ("crop", "Crop"),
+    ]
+
+    STATUS = [
+        ("paid", "Paid"),
+        ("pending", "Pending"),
+        ("partial", "Partial"),
+    ]
+
+    CATEGORY = [
+        ("livestock", "Livestock"),
+        ("dairy", "Dairy"),
+        ("poultry", "Poultry"),
+        ("crop", "Crop"),
+        ("fish", "Fish"),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    customer = models.ForeignKey(
+        Customers,
+        on_delete=models.CASCADE,
+        related_name="orders"
+    )
+    product_type = models.CharField(max_length=20, choices=PRODUCT_TYPES)
+    category = models.CharField(max_length=20, choices=CATEGORY, null=True, blank=True)
+    quantity = models.FloatField(null=True, blank=True)
+    unit_price = models.FloatField(null=True, blank=True)
+    egg_sale = models.ForeignKey(EggSale, on_delete=models.CASCADE, related_name="egg_sales", null=True, blank=True)
+    milk_sale = models.ForeignKey(MilkSale, on_delete=models.CASCADE, related_name="milk_sales", null=True, blank=True)
+    goatmilk_sale = models.ForeignKey(GoatMilkSale, on_delete=models.CASCADE, related_name="goatmilk_sales", null=True, blank=True)
+    catfish_sale = models.ForeignKey(CatfishSale, on_delete=models.CASCADE, related_name="catfish_sales", null=True, blank=True)
+    crop_sale = models.ForeignKey(CropSale, on_delete=models.CASCADE, related_name="crop_sales", null=True, blank=True)
+    total_amount = models.FloatField()
+    status = models.CharField(max_length=20, choices=STATUS)
+    notes = models.TextField(null=True, blank=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.product_type} sale #{self.id} - {self.customer.name}"

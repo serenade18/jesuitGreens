@@ -6,7 +6,7 @@ from django.db import models
 from django.db.models.functions import TruncMonth
 from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
-from django.utils.timezone import now
+from django.utils.timezone import now   
 from rest_framework import viewsets, status
 from rest_framework.exceptions import ValidationError, PermissionDenied, AuthenticationFailed
 from rest_framework.pagination import PageNumberPagination
@@ -33,7 +33,7 @@ from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference
     CatfishBatch, CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
     DairyGoatFeedingSchedule, DairyGoatFeedingRecord, MpesaPayment, FarmVisitBooking, BirdsFeedingSchedule, \
     BirdsFeedingRecord, FarmPlants, Plot, CropPlanting, CropHarvest, IrrigationSchedule, FertilizerApplication, \
-    PesticideApplication, Payment, VaccinationRecord
+    PesticideApplication, Payment, VaccinationRecord, CropSale
 
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 
@@ -49,7 +49,8 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     DairyCattleFeedingRecordSerializer, DairyGoatFeedingScheduleSerializer, DairyGoatFeedingRecordSerializer, \
     MpesaPaymentSerializer, BookingsSerializer, BirdsFeedingScheduleSerializer, BirdsFeedingRecordSerializer, \
     FarmPlantsSerializer, PlotSerializer, CropPlantingSerializer, CropHarvestSerializer, IrrigationScheduleSerializer, \
-    FertilizerApplicationSerializer, PesticideApplicationSerializer, PaymentSerializer, VaccinationRecordSerializer
+    FertilizerApplicationSerializer, PesticideApplicationSerializer, PaymentSerializer, VaccinationRecordSerializer, \
+    CropSaleSerializer
 
 from .services import MpesaService
 
@@ -7836,5 +7837,180 @@ class VaccinationRecordViewSet(viewsets.ViewSet):
             return Response({
                 "error": True,
                 "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Crop Sales
+class CropSaleViewSet(viewsets.ViewSet):
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'destroy': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action['default']
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    def list(self, request):
+        try:
+            sales = CropSale.objects.all().order_by('-id')
+            serializer = CropSaleSerializer(sales, many=True)
+            return Response({
+                "error": False,
+                "message": "Sales Records Retrieved",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request):
+        serializer = CropSaleSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response({
+                "error": True,
+                "message": "Invalid data",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        sale = serializer.save()
+
+        return Response({
+            "error": False,
+            "message": "Crop sale recorded successfully",
+            "data": CropSaleSerializer(sale).data
+        }, status=status.HTTP_201_CREATED)
+
+    def retrieve(self, request, pk=None):
+        try:
+            sale = CropSale.objects.get(pk=pk)
+            serializer = CropSaleSerializer(sale)
+            return Response({
+                "error": False,
+                "message": "Sale Record Retrieved",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except CropSale.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Sale not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        try:
+            sale = CropSale.objects.get(pk=pk)
+            serializer = CropSaleSerializer(sale, data=request.data)
+
+            if not serializer.is_valid():
+                return Response({
+                    "error": True,
+                    "message": "Invalid data",
+                    "details": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Sale updated successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except CropSale.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Sale not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def partial_update(self, request, pk=None):
+        try:
+            sale = CropSale.objects.get(pk=pk)
+            serializer = CropSaleSerializer(sale, data=request.data, partial=True)
+
+            if not serializer.is_valid():
+                return Response({
+                    "error": True,
+                    "message": "Invalid data",
+                    "details": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Sale partially updated",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except CropSale.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Sale not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        try:
+            sale = CropSale.objects.get(pk=pk)
+            sale.delete()
+            return Response({
+                "error": False,
+                "message": "Sale deleted successfully",
+                "data": []
+            }, status=status.HTTP_200_OK)
+
+        except CropSale.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Sale not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)

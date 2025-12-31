@@ -15,7 +15,7 @@ from greenApp.models import TeamRoles, Farm, NotificationPreference, Notificatio
     CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
     DairyGoatFeedingSchedule, DairyGoatFeedingRecord, BirdsFeedingSchedule, BirdsFeedingRecord, MpesaPayment, \
     FarmVisitBooking, FarmPlants, Plot, CropPlanting, CropHarvest, IrrigationSchedule, FertilizerApplication, \
-    PesticideApplication, VaccinationRecord
+    PesticideApplication, VaccinationRecord, CropSale
 
 User = get_user_model()
 
@@ -812,3 +812,64 @@ class VaccinationRecordSerializer(serializers.ModelSerializer):
 
     def get_animal_name(self, obj):
         return obj.animal.animal_name
+
+
+class CropSaleSerializer(serializers.ModelSerializer):
+    # Used only when creating/updating
+    customer = serializers.DictField(write_only=True)
+
+    # Returned in API responses
+    customer_details = CustomerSerializer(source="customer", read_only=True)
+
+    class Meta:
+        model = CropSale
+        fields = "__all__"
+        # Include customer_details in output
+        extra_fields = ['customer_details']
+
+    def validate(self, attrs):
+        customer_data = self.initial_data.get("customer")
+
+        if not customer_data:
+            raise serializers.ValidationError({"customer": "This field is required."})
+
+        if not customer_data.get("phone"):
+            raise serializers.ValidationError({
+                "customer": {"phone": "Phone is required"}
+            })
+
+        return attrs
+
+    def create(self, validated_data):
+        customer_data = validated_data.pop("customer")
+        phone = customer_data["phone"]
+
+        customer, created = Customers.objects.get_or_create(
+            phone=phone,
+            defaults={
+                "name": customer_data.get("name"),
+                "email": customer_data.get("email"),
+            }
+        )
+
+        if not created:
+            customer.name = customer_data.get("name", customer.name)
+            customer.email = customer_data.get("email", customer.email)
+            customer.save()
+
+        sale = CropSale.objects.create(customer=customer, **validated_data)
+
+        # ALWAYS create the matching order
+        Orders.objects.create(
+            customer=customer,
+            product_type="crop",
+            category="crop",
+            quantity=sale.quantity,
+            unit_price=sale.price_per_kilo,
+            total_amount=sale.total_amount,
+            status=sale.status,
+            crop_sale=sale
+        )
+
+        return sale
+
