@@ -77,6 +77,29 @@ class TeamRoles(models.Model):
         return self.role_name
 
 
+# Team Members Model
+class TeamMember(models.Model):
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        ON_LEAVE = "on_leave", "OnLeave"
+        SUSPENDED = "suspended", "Suspended"
+
+    id = models.AutoField(primary_key=True)
+    email = models.EmailField(unique=True)
+    name = models.CharField(max_length=150)
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    role = models.ForeignKey(TeamRoles,  on_delete=models.CASCADE, related_name="role")
+    user = models.ForeignKey(UserAccount, on_delete=models.CASCADE, related_name="team_members")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    password = models.CharField(max_length=255)  # store hashed password
+    is_active = models.BooleanField(default=True)
+    added_on = models.DateTimeField(default=timezone.now)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.name} ({self.role})"
+
+
 # Farm model
 class Farm(models.Model):
     id = models.AutoField(primary_key=True)
@@ -146,29 +169,6 @@ class Notification(models.Model):
 
     class Meta:
         ordering = ["-added_on"]
-
-
-# Team Members Model
-class TeamMember(models.Model):
-    class Status(models.TextChoices):
-        ACTIVE = "active", "Active"
-        ON_LEAVE = "on_leave", "OnLeave"
-        SUSPENDED = "suspended", "Suspended"
-
-    id = models.AutoField(primary_key=True)
-    email = models.EmailField(unique=True)
-    name = models.CharField(max_length=150)
-    phone = models.CharField(max_length=20, blank=True, null=True)
-    role = models.ForeignKey(TeamRoles,  on_delete=models.CASCADE, related_name="role")
-    user = models.ForeignKey(UserAccount, on_delete=models.CASCADE, related_name="team_members")
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
-    password = models.CharField(max_length=255)  # store hashed password
-    is_active = models.BooleanField(default=True)
-    added_on = models.DateTimeField(default=timezone.now)
-    objects = models.Manager()
-
-    def __str__(self):
-        return f"{self.name} ({self.role})"
 
 
 # Leave Request Model

@@ -86,15 +86,31 @@ class CustomUserSerializer(serializers.ModelSerializer):
 
 class UserAccountSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False)
+    teams = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = '__all__'
+        fields = "__all__"
+
+    def get_teams(self, user):
+        # Fetch team member records where this user is the member, not the creator
+        team_members = TeamMember.objects.filter(email=user.email).select_related("role")
+        return TeamSerializer(team_members, many=True).data
 
 
 class TeamRolesSerializer(serializers.ModelSerializer):
     class Meta:
         model = TeamRoles
+        fields = '__all__'
+
+
+class TeamSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=False)
+    role_name = serializers.CharField(source="role.role_name", read_only=True)
+    role_permissions = serializers.JSONField(source="role.permissions", read_only=True)
+
+    class Meta:
+        model = TeamMember
         fields = '__all__'
 
 
@@ -115,15 +131,6 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = "__all__"
-
-
-class TeamSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, required=False)
-    role_name = serializers.CharField(source="role.role_name", read_only=True)
-
-    class Meta:
-        model = TeamMember
-        fields = '__all__'
 
 
 class LeaveRequestSerializer(serializers.ModelSerializer):
