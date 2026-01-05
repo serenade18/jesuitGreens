@@ -695,16 +695,19 @@ class TeamMembersViewSet(viewsets.ViewSet):
     def list(self, request):
         try:
             user = request.user
-            if IsAdminRole().has_permission(request, self):
-                team = TeamMember.objects.all().order_by("-id")
+
+            if user.role in ["super_admin", "farm_admin"]:
+                team = TeamMember.objects.select_related("role", "user").order_by("-id")
             else:
-                team = TeamMember.objects.filter(user=user).order_by("-id")
+                team = TeamMember.objects.filter(email=user.email)
+
             serializer = TeamSerializer(team, many=True)
             return Response({
                 "error": False,
                 "message": "All Team Members",
                 "data": serializer.data
             }, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({
                 "error": True,
