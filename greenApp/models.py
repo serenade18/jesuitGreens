@@ -1412,3 +1412,55 @@ class Orders(models.Model):
 
     def __str__(self):
         return f"{self.product_type} sale #{self.id} - {self.customer.name}"
+
+
+# Vet Report Model
+class VetReport(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("in_progress", "In Progress"),
+        ("completed", "Completed"),
+    ]
+
+    REPORT_TYPE_CHOICES = [
+        ("routine_checkup", "Routine Checkup"),
+        ("emergency", "Emergency"),
+        ("vaccination", "Vaccination"),
+        ("treatment", "Treatment"),
+        ("consultation", "Consultation"),
+        ("surgery", "Surgery"),
+    ]
+
+    ANIMAL_TYPE_CHOICES = [
+        ("cattle", "Cattle"),
+        ("goats", "Goats"),
+        ("poultry", "Poultry"),
+        ("rabbits", "Rabbits"),
+        ("catfish", "Catfish"),
+        ("other", "Other"),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    vet_officer = models.CharField(max_length=255)
+    report_type = models.CharField(max_length=50, choices=REPORT_TYPE_CHOICES)
+    animal_type = models.CharField(max_length=50, choices=ANIMAL_TYPE_CHOICES)
+    animal_id = models.CharField(max_length=100, blank=True, null=True)
+    animal_name = models.CharField(max_length=255, blank=True, null=True)
+    diagnosis = models.TextField()
+    treatment = models.TextField(blank=True, null=True)
+    medications = models.TextField(blank=True, null=True)
+    follow_up_date = models.DateField(blank=True, null=True)
+    follow_up_notes = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    report_date = models.DateField()
+    notes = models.TextField(blank=True, null=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    objects = models.Manager()
+
+    class Meta:
+        ordering = ["-report_date", "-added_on"]
+
+    def __str__(self):
+        return f"{self.vet_officer} - {self.report_type} ({self.report_date})"
+

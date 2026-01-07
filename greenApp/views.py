@@ -33,7 +33,7 @@ from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference
     CatfishBatch, CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
     DairyGoatFeedingSchedule, DairyGoatFeedingRecord, MpesaPayment, FarmVisitBooking, BirdsFeedingSchedule, \
     BirdsFeedingRecord, FarmPlants, Plot, CropPlanting, CropHarvest, IrrigationSchedule, FertilizerApplication, \
-    PesticideApplication, Payment, VaccinationRecord, CropSale
+    PesticideApplication, Payment, VaccinationRecord, CropSale, VetReport
 
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 
@@ -50,7 +50,7 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     MpesaPaymentSerializer, BookingsSerializer, BirdsFeedingScheduleSerializer, BirdsFeedingRecordSerializer, \
     FarmPlantsSerializer, PlotSerializer, CropPlantingSerializer, CropHarvestSerializer, IrrigationScheduleSerializer, \
     FertilizerApplicationSerializer, PesticideApplicationSerializer, PaymentSerializer, VaccinationRecordSerializer, \
-    CropSaleSerializer
+    CropSaleSerializer, VetReportSerializer
 
 from .services import MpesaService
 
@@ -8017,3 +8017,121 @@ class CropSaleViewSet(viewsets.ViewSet):
                 "message": "An Error Occurred",
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Vet Report ViewSet
+class VetReportViewSet(viewsets.ModelViewSet):
+    queryset = VetReport.objects.all()
+    serializer_class = VetReportSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    search_fields = ['vet_officer', 'animal_name', 'diagnosis', 'treatment']
+    filterset_fields = ['report_type', 'animal_type', 'status', 'report_date']
+    ordering_fields = ['report_date', 'added_on', 'status']
+    ordering = ['-report_date']
+
+    def list(self, request):
+        try:
+            queryset = self.filter_queryset(self.get_queryset())
+            serializer = VetReportSerializer(queryset, many=True)
+            return Response({
+                "error": False,
+                "message": "All Vet Reports",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An Error Occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request):
+        serializer = VetReportSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "error": False,
+                "message": "Vet Report created successfully",
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED)
+        return Response({
+            "error": True,
+            "message": "Validation failed",
+            "details": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, pk=None):
+        try:
+            report = VetReport.objects.get(pk=pk)
+            serializer = VetReportSerializer(report)
+            return Response({
+                "error": False,
+                "message": "Vet Report details",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except VetReport.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Vet Report not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    def update(self, request, pk=None):
+        try:
+            report = VetReport.objects.get(pk=pk)
+            serializer = VetReportSerializer(report, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Vet Report updated successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+            return Response({
+                "error": True,
+                "message": "Validation failed",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except VetReport.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Vet Report not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    def partial_update(self, request, pk=None):
+        try:
+            report = VetReport.objects.get(pk=pk)
+            serializer = VetReportSerializer(report, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "error": False,
+                    "message": "Vet Report partially updated",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+            return Response({
+                "error": True,
+                "message": "Validation failed",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except VetReport.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Vet Report not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    def destroy(self, request, pk=None):
+        try:
+            report = VetReport.objects.get(pk=pk)
+            report.delete()
+            return Response({
+                "error": False,
+                "message": "Vet Report deleted successfully",
+                "data": []
+            }, status=status.HTTP_200_OK)
+        except VetReport.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Vet Report not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+

@@ -15,7 +15,7 @@ from greenApp.models import TeamRoles, Farm, NotificationPreference, Notificatio
     CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
     DairyGoatFeedingSchedule, DairyGoatFeedingRecord, BirdsFeedingSchedule, BirdsFeedingRecord, MpesaPayment, \
     FarmVisitBooking, FarmPlants, Plot, CropPlanting, CropHarvest, IrrigationSchedule, FertilizerApplication, \
-    PesticideApplication, VaccinationRecord, CropSale
+    PesticideApplication, VaccinationRecord, CropSale, VetReport
 
 User = get_user_model()
 
@@ -880,3 +880,9 @@ class CropSaleSerializer(serializers.ModelSerializer):
 
         return sale
 
+
+class VetReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VetReport
+        fields = '__all__'
+        read_only_fields = ['added_on', 'updated_at']
