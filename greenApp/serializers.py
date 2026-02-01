@@ -15,7 +15,7 @@ from greenApp.models import TeamRoles, Farm, NotificationPreference, Notificatio
     CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
     DairyGoatFeedingSchedule, DairyGoatFeedingRecord, BirdsFeedingSchedule, BirdsFeedingRecord, MpesaPayment, \
     FarmVisitBooking, FarmPlants, Plot, CropPlanting, CropHarvest, IrrigationSchedule, FertilizerApplication, \
-    PesticideApplication, VaccinationRecord, CropSale
+    PesticideApplication, VaccinationRecord, CropSale, ActivityLog
 
 User = get_user_model()
 
@@ -879,4 +879,78 @@ class CropSaleSerializer(serializers.ModelSerializer):
         )
 
         return sale
+
+
+class ActivityLogSerializer(serializers.ModelSerializer):
+    actor = serializers.SerializerMethodField()
+    target = serializers.SerializerMethodField()
+    action_label = serializers.CharField(source="get_action_display", read_only=True)
+
+    class Meta:
+        model = ActivityLog
+        fields = [
+            "id",
+            "action",
+            "action_label",
+            "description",
+            "actor",
+            "target",
+            "metadata",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_actor(self, obj):
+        if not obj.actor:
+            return None
+        return {
+            "id": obj.actor.id,
+            "email": obj.actor.email,
+            "role": getattr(obj.actor, "role", None),
+        }
+
+    def get_target(self, obj):
+        if not obj.content_object:
+            return None
+
+        return {
+            "type": obj.content_type.model,          # e.g. "milksale"
+            "app": obj.content_type.app_label,       # e.g. "farm"
+            "id": obj.object_id,
+            "label": str(obj.content_object),         # human-readable
+        }
+
+
+class ActivityFeedSerializer(serializers.ModelSerializer):
+    actor_name = serializers.SerializerMethodField()
+    target_label = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ActivityLog
+        fields = [
+            "id",
+            "action",
+            "description",
+            "actor_name",
+            "target_label",
+            "created_at",
+        ]
+
+    def get_actor_name(self, obj):
+        return obj.actor.email if obj.actor else "System"
+
+    def get_target_label(self, obj):
+        return str(obj.content_object) if obj.content_object else None
+
+
+class ActivityLogFilterSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(
+        choices=ActivityLog.ACTION_CHOICES,
+        required=False
+    )
+    actor_id = serializers.UUIDField(required=False)
+    content_type = serializers.CharField(required=False)
+    start_date = serializers.DateField(required=False)
+    end_date = serializers.DateField(required=False)
+
 

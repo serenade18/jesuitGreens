@@ -33,7 +33,7 @@ from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference
     CatfishBatch, CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
     DairyGoatFeedingSchedule, DairyGoatFeedingRecord, MpesaPayment, FarmVisitBooking, BirdsFeedingSchedule, \
     BirdsFeedingRecord, FarmPlants, Plot, CropPlanting, CropHarvest, IrrigationSchedule, FertilizerApplication, \
-    PesticideApplication, Payment, VaccinationRecord, CropSale
+    PesticideApplication, Payment, VaccinationRecord, CropSale, ActivityLog
 
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 
@@ -50,7 +50,7 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     MpesaPaymentSerializer, BookingsSerializer, BirdsFeedingScheduleSerializer, BirdsFeedingRecordSerializer, \
     FarmPlantsSerializer, PlotSerializer, CropPlantingSerializer, CropHarvestSerializer, IrrigationScheduleSerializer, \
     FertilizerApplicationSerializer, PesticideApplicationSerializer, PaymentSerializer, VaccinationRecordSerializer, \
-    CropSaleSerializer
+    CropSaleSerializer, ActivityFeedSerializer, ActivityLogFilterSerializer
 
 from .services import MpesaService
 
@@ -8014,3 +8014,115 @@ class CropSaleViewSet(viewsets.ViewSet):
                 "message": "An Error Occurred",
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Activity Log viewSet
+class ActivityLogViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        """
+        List activity logs with optional filters
+        """
+        queryset = ActivityLog.objects.select_related(
+            "actor",
+            "content_type"
+        )
+
+        # Validate filters
+        filter_serializer = ActivityLogFilterSerializer(data=request.query_params)
+        filter_serializer.is_valid(raise_exception=True)
+        filters = filter_serializer.validated_data
+
+        # Apply filters
+        if "action" in filters:
+            queryset = queryset.filter(action=filters["action"])
+
+        if "actor_id" in filters:
+            queryset = queryset.filter(actor_id=filters["actor_id"])
+
+        if "content_type" in filters:
+            queryset = queryset.filter(
+                content_type__model=filters["content_type"].lower()
+            )
+
+        if "start_date" in filters:
+            queryset = queryset.filter(created_at__date__gte=filters["start_date"])
+
+        if "end_date" in filters:
+            queryset = queryset.filter(created_at__date__lte=filters["end_date"])
+
+        # Lightweight feed by default
+        serializer = ActivityFeedSerializer(queryset[:100], many=True)
+
+        return Response({
+            "error": False,
+            "message": "Activity logs retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def retrieve(self, request, pk=None):
+        try:
+            activity = ActivityLog.objects.select_related(
+                "actor",
+                "content_type"
+            ).get(pk=pk)
+        except ActivityLog.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Activity log not found",
+                "data": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = ActivityLogSerializer(activity)
+
+        return Response({
+            "error": False,
+            "message": "Activity log retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=["get"], url_path="by-object")
+    def by_object(self, request):
+        """
+        Query params:
+        - app_label
+        - model
+        - object_id
+        """
+        app_label = request.query_params.get("app_label")
+        model = request.query_params.get("model")
+        object_id = request.query_params.get("object_id")
+
+        if not all([app_label, model, object_id]):
+            return Response({
+                "error": True,
+                "message": "app_label, model and object_id are required",
+                "data": None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            content_type = ContentType.objects.get(
+                app_label=app_label,
+                model=model.lower()
+            )
+        except ContentType.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Invalid content type",
+                "data": None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        queryset = ActivityLog.objects.filter(
+            content_type=content_type,
+            object_id=object_id
+        )
+
+        serializer = ActivityLogSerializer(queryset, many=True)
+
+        return Response({
+            "error": False,
+            "message": "Object activity retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+

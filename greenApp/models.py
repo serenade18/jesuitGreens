@@ -4,6 +4,8 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseU
 from django.db import models
 from django.db.models import JSONField
 from django.utils import timezone
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes.fields import GenericForeignKey
 
 from greenProject import settings
 
@@ -280,7 +282,7 @@ class DairyCattle(models.Model):
     animal_type = models.CharField(max_length=20, choices=ANIMAL_TYPES, default="dairy")
     animal_name = models.CharField(max_length=50, unique=True)
     breed = models.CharField(max_length=50, choices=BREED_CHOICES, blank=True, null=True)
-    tag_number = models.CharField(max_length=50, blank=True, null=True, unique=True)
+    tag_number = models.CharField(max_length=50, blank=True, null=True, unique=False)
     birth_weight = models.DecimalField(max_digits=5, decimal_places=1, blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, blank=True, null=True)
@@ -1412,3 +1414,38 @@ class Orders(models.Model):
 
     def __str__(self):
         return f"{self.product_type} sale #{self.id} - {self.customer.name}"
+
+
+# Activity model
+class ActivityLog(models.Model):
+    ACTION_CHOICES = [
+        ("create", "Create"),
+        ("update", "Update"),
+        ("delete", "Delete"),
+        ("status_change", "Status Change"),
+        ("payment", "Payment"),
+        ("health", "Health"),
+        ("inventory", "Inventory"),
+        ("finance", "Finance"),
+        ("task", "Task"),
+        ("other", "Other"),
+    ]
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="activities"
+    )
+    action = models.CharField(max_length=50, choices=ACTION_CHOICES)
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    content_object = GenericForeignKey("content_type", "object_id")
+    description = models.TextField()
+    metadata = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+

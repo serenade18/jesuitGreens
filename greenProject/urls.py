@@ -18,7 +18,7 @@ from greenApp.views import UserViewSet, UserInfoView, ChangePasswordView, TeamRo
     DairyGoatFeedingRecordViewSet, MpesaViewSet, BookingPaymentViewSet, BirdsFeedingScheduleViewSet, \
     BirdsFeedingRecordViewSet, PlantsViewSet, PlotsViewSet, CropPlantingViewSet, CropHarvestViewSet, \
     FertilizerApplicationViewSet, PaymentViewSet, PesticideApplicationViewSet, IrrigationScheduleViewSet, \
-    VaccinationRecordViewSet, CropSaleViewSet
+    VaccinationRecordViewSet, CropSaleViewSet, ActivityLogViewSet
 
 router = routers.DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -77,6 +77,7 @@ router.register(r'payments', PaymentViewSet, basename='payments')
 router.register(r'pesticides', PesticideApplicationViewSet, basename='pesticides')
 router.register(r'irrigations', IrrigationScheduleViewSet, basename='irrigations')
 router.register(r'vaccinations', VaccinationRecordViewSet, basename='vaccinations')
+router.register(r"activities", ActivityLogViewSet, basename="activity")
 
 
 urlpatterns = [
