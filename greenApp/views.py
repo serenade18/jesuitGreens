@@ -2,11 +2,12 @@ import jwt
 from datetime import datetime, timedelta
 
 from django.contrib.auth.hashers import make_password, check_password
+from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.db.models.functions import TruncMonth
 from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
-from django.utils.timezone import now   
+from django.utils.timezone import now
 from rest_framework import viewsets, status
 from rest_framework.exceptions import ValidationError, PermissionDenied, AuthenticationFailed
 from rest_framework.pagination import PageNumberPagination
@@ -50,7 +51,7 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     MpesaPaymentSerializer, BookingsSerializer, BirdsFeedingScheduleSerializer, BirdsFeedingRecordSerializer, \
     FarmPlantsSerializer, PlotSerializer, CropPlantingSerializer, CropHarvestSerializer, IrrigationScheduleSerializer, \
     FertilizerApplicationSerializer, PesticideApplicationSerializer, PaymentSerializer, VaccinationRecordSerializer, \
-    CropSaleSerializer, ActivityFeedSerializer, ActivityLogFilterSerializer
+    CropSaleSerializer, ActivityFeedSerializer, ActivityLogFilterSerializer, ActivityLogSerializer
 
 from .services import MpesaService
 
@@ -346,6 +347,8 @@ class UserViewSet(viewsets.ViewSet):
 
         user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 # --- User Info ---
 
 
@@ -361,6 +364,7 @@ class TeamRolesViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         perms = self.permission_classes_by_action.get(self.action, self.permission_classes_by_action['default'])
+
         def has_any_permission(request, view):
             return any(p().has_permission(request, view) for p in perms)
 
@@ -462,6 +466,7 @@ class FarmViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         perms = self.permission_classes_by_action.get(self.action, self.permission_classes_by_action['default'])
+
         def has_any_permission(request, view):
             return any(p().has_permission(request, view) for p in perms)
 
@@ -599,7 +604,7 @@ class NotificationsViewSet(viewsets.ViewSet):
 
     def list(self, request):
         filter_param = request.query_params.get("filter", "all")
-        
+
         notice = Notification.objects.all()
         if filter_param == "unread":
             notice = notice.filter(read=False)
@@ -672,7 +677,7 @@ class NotificationsViewSet(viewsets.ViewSet):
 # Team Members
 class TeamMembersViewSet(viewsets.ViewSet):
     permission_classes_by_action = {
-        'create': [IsFarmManagerRole],
+        'create': [IsFarmManagerRole, IsAdminRole],
         'list': [IsAdminRole, IsFarmManagerRole],
         'destroy': [IsFarmManagerRole, IsAdminRole],
         'update': [IsFarmManagerRole, IsAdminRole],
@@ -695,16 +700,25 @@ class TeamMembersViewSet(viewsets.ViewSet):
     def list(self, request):
         try:
             user = request.user
-            if IsAdminRole().has_permission(request, self):
-                team = TeamMember.objects.all().order_by("-id")
+
+            # Super Admin and Farm Admin → see ALL team members
+            if user.role in ["super_admin", "farm_admin"]:
+                team = TeamMember.objects.select_related("role", "user").order_by("-id")
+
+            # Other roles → forbidden
             else:
-                team = TeamMember.objects.filter(user=user).order_by("-id")
+                return Response({
+                    "error": True,
+                    "message": "You do not have permission to view team members"
+                }, status=status.HTTP_403_FORBIDDEN)
+
             serializer = TeamSerializer(team, many=True)
             return Response({
                 "error": False,
                 "message": "All Team Members",
                 "data": serializer.data
             }, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({
                 "error": True,
@@ -1074,37 +1088,36 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
 # Salaries
 class SalaryViewSet(viewsets.ViewSet):
-    permission_classes_by_action = {
-        'create': [IsFarmManagerRole],
-        'list': [IsAdminRole, IsFarmManagerRole],
-        'retrieve': [IsFarmManagerRole, IsAdminRole],
-        'update': [IsFarmManagerRole, IsAdminRole],
-        'partial_update': [IsFarmManagerRole, IsAdminRole],
-        'destroy': [IsFarmManagerRole, IsAdminRole],
-        'default': [IsAuthenticated],
-    }
 
     def get_permissions(self):
-        perms = self.permission_classes_by_action.get(self.action, self.permission_classes_by_action['default'])
+        if self.action == "create":
+            permission_classes = [IsFarmManagerRole]
+        elif self.action in ["list", "retrieve", "update", "partial_update", "destroy"]:
+            permission_classes = [IsAuthenticated]
+        else:
+            permission_classes = [IsAuthenticated]
 
-        def has_any_permission(request, view):
-            return any(p().has_permission(request, view) for p in perms)
+        return [permission() for permission in permission_classes]
 
-        class AnyPermission(BasePermission):
-            def has_permission(self, request, view):
-                return has_any_permission(request, view)
-
-        return [AnyPermission()]
-
+    # ------------------------------------
+    # LIST
+    # ------------------------------------
     def list(self, request):
         try:
             user = request.user
-            if IsAdminRole().has_permission(request, self):
+
+            # SUPER ADMIN OR FARM ADMIN → SEE ALL
+            if user.role in ["super_admin", "farm_admin"]:
                 salaries = Salary.objects.all().order_by("-id")
+
+            # FARM WORKER → SEE ONLY OWN
             else:
-                salaries = Salary.objects.filter(employee__user=user).order_by("-id")
+                salaries = Salary.objects.filter(
+                    employee__user=user
+                ).order_by("-id")
 
             serializer = SalarySerializer(salaries, many=True)
+
             return Response({
                 "error": False,
                 "message": "All Salaries",
@@ -1118,15 +1131,30 @@ class SalaryViewSet(viewsets.ViewSet):
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
 
+    # ------------------------------------
+    # RETRIEVE
+    # ------------------------------------
     def retrieve(self, request, pk=None):
         try:
             salary = get_object_or_404(Salary, pk=pk)
+
+            user = request.user
+
+            # Worker cannot view others' salaries
+            if user.role == "farm_worker" and salary.employee.user != user:
+                return Response({
+                    "error": True,
+                    "message": "You do not have permission to view this salary"
+                }, status=status.HTTP_403_FORBIDDEN)
+
             serializer = SalaryDetailSerializer(salary)
+
             return Response({
                 "error": False,
                 "message": "Salary Details",
                 "data": serializer.data
             }, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({
                 "error": True,
@@ -1134,32 +1162,38 @@ class SalaryViewSet(viewsets.ViewSet):
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
 
+    # ------------------------------------
+    # CREATE (Farm Admin Only)
+    # ------------------------------------
     def create(self, request):
+        if request.user.role != "farm_admin":
+            return Response({
+                "error": True,
+                "message": "Only Farm Admin can create salaries"
+            }, status=status.HTTP_403_FORBIDDEN)
+
         try:
             member_id = request.data.get("employee")
+
             if not member_id:
                 return Response({
                     "error": True,
                     "message": "Team member is required"
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Get the member
             member = get_object_or_404(TeamMember, id=member_id)
 
-            # Get the role name from Role model
             if not member.role:
                 return Response({
                     "error": True,
                     "message": "Selected team member has no role assigned"
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            role_name = member.role.role_name  # <-- Fetch role_name via role ID
-
-            # Inject into request data
             data = request.data.copy()
-            data["role"] = role_name  # <-- Save role name in salary
+            data["role"] = member.role.role_name
 
             serializer = SalarySerializer(data=data)
+
             if serializer.is_valid():
                 serializer.save()
                 return Response({
@@ -1181,10 +1215,25 @@ class SalaryViewSet(viewsets.ViewSet):
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
 
+    # ------------------------------------
+    # UPDATE
+    # ------------------------------------
     def update(self, request, pk=None):
+        if request.user.role not in ["super_admin", "farm_admin"]:
+            return Response({
+                "error": True,
+                "message": "You do not have permission"
+            }, status=status.HTTP_403_FORBIDDEN)
+
         try:
             salary = get_object_or_404(Salary, pk=pk)
-            serializer = SalarySerializer(salary, data=request.data, partial=True)
+
+            serializer = SalarySerializer(
+                salary,
+                data=request.data,
+                partial=True
+            )
+
             if serializer.is_valid():
                 serializer.save()
                 return Response({
@@ -1192,11 +1241,13 @@ class SalaryViewSet(viewsets.ViewSet):
                     "message": "Salary Updated Successfully",
                     "data": serializer.data
                 }, status=status.HTTP_200_OK)
+
             return Response({
                 "error": True,
                 "message": "Validation Failed",
                 "details": serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
+
         except Exception as e:
             return Response({
                 "error": True,
@@ -1204,14 +1255,25 @@ class SalaryViewSet(viewsets.ViewSet):
                 "details": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
 
+    # ------------------------------------
+    # DELETE
+    # ------------------------------------
     def destroy(self, request, pk=None):
+        if request.user.role not in ["super_admin", "farm_admin"]:
+            return Response({
+                "error": True,
+                "message": "You do not have permission"
+            }, status=status.HTTP_403_FORBIDDEN)
+
         try:
             salary = get_object_or_404(Salary, pk=pk)
             salary.delete()
+
             return Response({
                 "error": False,
                 "message": "Salary Deleted Successfully"
             }, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({
                 "error": True,
@@ -1422,13 +1484,14 @@ class SalaryPaymentViewSet(viewsets.ViewSet):
 class DairyCattleViewSet(viewsets.ModelViewSet):
     queryset = DairyCattle.objects.all().order_by('-id')
     serializer_class = DairyCattleSerializer
-    permission_classes = [IsAuthenticated]     # Override per action if needed
+    permission_classes = [IsAuthenticated]  # Override per action if needed
 
     # ---- Filters, search, ordering ----
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['breed', 'category', 'animal_type']
     search_fields = ['animal_name', 'tag_number', 'breed', 'category']
     ordering_fields = ['created_at', 'date_of_birth', 'animal_name']
+
     # ---- Standard response wrapper ----
     def response(self, error, message, data=None, status_code=status.HTTP_200_OK):
         return Response({
@@ -2643,13 +2706,14 @@ class EggCollectionViewSet(viewsets.ViewSet):
 class DairyGoatViewSet(viewsets.ModelViewSet):
     queryset = DairyGoat.objects.all().order_by('-id')
     serializer_class = DairyGoatSerializer
-    permission_classes = [IsAuthenticated]     # Override per action if needed
+    permission_classes = [IsAuthenticated]  # Override per action if needed
 
     # ---- Filters, search, ordering ----
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['breed', 'category', 'animal_type']
     search_fields = ['animal_name', 'tag_number', 'breed', 'category']
     ordering_fields = ['created_at', 'date_of_birth', 'animal_name']
+
     # ---- Standard response wrapper ----
     def response(self, error, message, data=None, status_code=status.HTTP_200_OK):
         return Response({
@@ -3668,7 +3732,7 @@ class CustomerViewSet(viewsets.ViewSet):
     def retrieve(self, request, pk=None):
         try:
             customer = get_object_or_404(Customers, pk=pk)
-            serializer = CustomerSerializer(customer,   context={"request": request})
+            serializer = CustomerSerializer(customer, context={"request": request})
 
             serializer_data = serializer.data
 
@@ -4039,7 +4103,8 @@ class ExpenseViewSet(viewsets.ViewSet):
                 "data": serializer.data
             }, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": True, "message": "An error occurred", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": True, "message": "An error occurred", "details": str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
 
     def create(self, request):
         try:
@@ -4051,17 +4116,21 @@ class ExpenseViewSet(viewsets.ViewSet):
                     "message": "Expense Created Successfully",
                     "data": serializer.data
                 }, status=status.HTTP_201_CREATED)
-            return Response({"error": True, "message": "Validation failed", "data": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": True, "message": "Validation failed", "data": serializer.errors},
+                            status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"error": True, "message": "An error occurred", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": True, "message": "An error occurred", "details": str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
 
     def retrieve(self, request, pk=None):
         try:
             expense = get_object_or_404(Expense, pk=pk)
             serializer = ExpenseSerializer(expense)
-            return Response({"error": False, "message": "Expense Retrieved", "data": serializer.data}, status=status.HTTP_200_OK)
+            return Response({"error": False, "message": "Expense Retrieved", "data": serializer.data},
+                            status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": True, "message": "Unable to retrieve expense", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": True, "message": "Unable to retrieve expense", "details": str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, pk=None):
         try:
@@ -4069,10 +4138,13 @@ class ExpenseViewSet(viewsets.ViewSet):
             serializer = ExpenseSerializer(expense, data=request.data, context={'request': request})
             if serializer.is_valid():
                 serializer.save()
-                return Response({"error": False, "message": "Expense Updated Successfully", "data": serializer.data}, status=status.HTTP_200_OK)
-            return Response({"error": True, "message": "Validation failed", "data": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": False, "message": "Expense Updated Successfully", "data": serializer.data},
+                                status=status.HTTP_200_OK)
+            return Response({"error": True, "message": "Validation failed", "data": serializer.errors},
+                            status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"error": True, "message": "Unable to update expense", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": True, "message": "Unable to update expense", "details": str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
 
     def partial_update(self, request, pk=None):
         try:
@@ -4080,18 +4152,24 @@ class ExpenseViewSet(viewsets.ViewSet):
             serializer = ExpenseSerializer(expense, data=request.data, partial=True, context={'request': request})
             if serializer.is_valid():
                 serializer.save()
-                return Response({"error": False, "message": "Expense Partially Updated Successfully", "data": serializer.data}, status=status.HTTP_200_OK)
-            return Response({"error": True, "message": "Validation failed", "data": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": False, "message": "Expense Partially Updated Successfully", "data": serializer.data},
+                    status=status.HTTP_200_OK)
+            return Response({"error": True, "message": "Validation failed", "data": serializer.errors},
+                            status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"error": True, "message": "Unable to partially update expense", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": True, "message": "Unable to partially update expense", "details": str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
 
     def destroy(self, request, pk=None):
         try:
             expense = get_object_or_404(Expense, pk=pk)
             expense.delete()
-            return Response({"error": False, "message": "Expense Deleted Successfully", "data": []}, status=status.HTTP_200_OK)
+            return Response({"error": False, "message": "Expense Deleted Successfully", "data": []},
+                            status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": True, "message": "Unable to delete expense", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": True, "message": "Unable to delete expense", "details": str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
 
 
 # Recurring Expense ViewSet
@@ -4125,9 +4203,11 @@ class RecurringExpenseViewSet(viewsets.ViewSet):
         try:
             recurring = RecurringExpense.objects.all().order_by('-id')
             serializer = RecurringExpenseSerializer(recurring, many=True)
-            return Response({"error": False, "message": "Recurring Expenses List", "data": serializer.data}, status=status.HTTP_200_OK)
+            return Response({"error": False, "message": "Recurring Expenses List", "data": serializer.data},
+                            status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": True, "message": "An error occurred", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": True, "message": "An error occurred", "details": str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
 
     def create(self, request):
         try:
@@ -4135,10 +4215,14 @@ class RecurringExpenseViewSet(viewsets.ViewSet):
             if serializer.is_valid():
                 serializer.save()
 
-                return Response({"error": False, "message": "Recurring Expense Created Successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
-            return Response({"error": True, "message": "Validation failed", "data": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": False, "message": "Recurring Expense Created Successfully", "data": serializer.data},
+                    status=status.HTTP_201_CREATED)
+            return Response({"error": True, "message": "Validation failed", "data": serializer.errors},
+                            status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"error": True, "message": "An error occurred", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": True, "message": "An error occurred", "details": str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
 
     def retrieve(self, request, pk=None):
         try:
@@ -4151,9 +4235,11 @@ class RecurringExpenseViewSet(viewsets.ViewSet):
             data = serializer.data
             data["generated_expenses"] = generated_serializer.data
 
-            return Response({"error": False, "message": "Recurring Expense Retrieved", "data": data}, status=status.HTTP_200_OK)
+            return Response({"error": False, "message": "Recurring Expense Retrieved", "data": data},
+                            status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": True, "message": "Unable to retrieve recurring expense", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": True, "message": "Unable to retrieve recurring expense", "details": str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, pk=None):
         try:
@@ -4168,33 +4254,44 @@ class RecurringExpenseViewSet(viewsets.ViewSet):
                     account_number=updated.account_number
                 )
 
-                return Response({"error": False, "message": "Recurring Expense Updated Successfully", "data": serializer.data}, status=status.HTTP_200_OK)
-            return Response({"error": True, "message": "Validation failed", "data": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": False, "message": "Recurring Expense Updated Successfully", "data": serializer.data},
+                    status=status.HTTP_200_OK)
+            return Response({"error": True, "message": "Validation failed", "data": serializer.errors},
+                            status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"error": True, "message": "Unable to update recurring expense", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": True, "message": "Unable to update recurring expense", "details": str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
 
     def partial_update(self, request, pk=None):
         try:
             recurring = get_object_or_404(RecurringExpense, pk=pk)
-            serializer = RecurringExpenseSerializer(recurring, data=request.data, partial=True, context={'request': request})
+            serializer = RecurringExpenseSerializer(recurring, data=request.data, partial=True,
+                                                    context={'request': request})
             if serializer.is_valid():
                 updated = serializer.save()
                 Expense.objects.filter(recurring_expense=recurring, status='pending').update(
                     provider_name=updated.provider_name,
                     account_number=updated.account_number
                 )
-                return Response({"error": False, "message": "Recurring Expense Partially Updated Successfully", "data": serializer.data}, status=status.HTTP_200_OK)
-            return Response({"error": True, "message": "Validation failed", "data": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": False, "message": "Recurring Expense Partially Updated Successfully",
+                                 "data": serializer.data}, status=status.HTTP_200_OK)
+            return Response({"error": True, "message": "Validation failed", "data": serializer.errors},
+                            status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"error": True, "message": "Unable to partially update recurring expense", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": True, "message": "Unable to partially update recurring expense", "details": str(e)},
+                status=status.HTTP_400_BAD_REQUEST)
 
     def destroy(self, request, pk=None):
         try:
             recurring = get_object_or_404(RecurringExpense, pk=pk)
             recurring.delete()
-            return Response({"error": False, "message": "Recurring Expense Deleted Successfully", "data": []}, status=status.HTTP_200_OK)
+            return Response({"error": False, "message": "Recurring Expense Deleted Successfully", "data": []},
+                            status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": True, "message": "Unable to delete recurring expense", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": True, "message": "Unable to delete recurring expense", "details": str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['post'])
     def generate_due(self, request):
@@ -4208,7 +4305,6 @@ class RecurringExpenseViewSet(viewsets.ViewSet):
 
 # Dashboard summary
 class DashboardViewSet(viewsets.ViewSet):
-
     permission_classes_by_action = {
         'list': [IsAuthenticated],
         'default': [IsAuthenticated]
@@ -4246,7 +4342,6 @@ class DashboardViewSet(viewsets.ViewSet):
 
         total_expense = bills + expenses
         total_profit = total_sales - (bills + expenses + procurement)
-
 
         dict_response = {
             "error": False,
@@ -4867,13 +4962,14 @@ class InventoryViewSet(viewsets.ViewSet):
 class RabbitViewSet(viewsets.ModelViewSet):
     queryset = Rabbit.objects.all().order_by('-id')
     serializer_class = RabbitSerializer
-    permission_classes = [IsAuthenticated]     # Override per action if needed
+    permission_classes = [IsAuthenticated]  # Override per action if needed
 
     # ---- Filters, search, ordering ----
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['breed', 'category', 'animal_type']
     search_fields = ['animal_name', 'breed', 'category']
     ordering_fields = ['added_on', 'date_of_birth', 'animal_name']
+
     # ---- Standard response wrapper ----
     def response(self, error, message, data=None, status_code=status.HTTP_200_OK):
         return Response({
@@ -7473,7 +7569,6 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 return any(p().has_permission(request, view) for p in perms)
 
         return [AnyPermission()]
-
 
     # -------------------------
     # HELPER FUNCTION

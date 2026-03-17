@@ -55,7 +55,6 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'greenApp.middleware.CurrentUserMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -111,11 +110,17 @@ REST_FRAMEWORK = {
 # DATABASES = {
 #     'default': {
 #         'ENGINE': 'django.db.backends.mysql',
-#         'NAME': 'cikalive_db',
-#         'USER': 'cikalive_user',
-#         'PASSWORD': 'Z]cdHLvg^[9=zZ99',
+#         'NAME': 'kpupbpbi_db',
+#         'USER': 'kpupbpbi_user',
+#         'PASSWORD': 'yVmeaO}llurzLAv1',
 #         'HOST': '127.0.0.1',
-#         'PORT': '3307',
+#         'PORT': '3306',
+#         'CONN_MAX_AGE': 0,  # Close connections immediately after each request
+#         'OPTIONS': {
+#             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+#             'charset': 'utf8mb4',
+#             'connect_timeout': 10,
+#         },
 #     }
 # }
 
@@ -189,7 +194,7 @@ MPESA_CONSUMER_SECRET="3AGyeZehsK9Wi0sGC5t30G6lTGT8hxBrKpF3WYNxk5AwAMmCaOnCU2dLW
 MPESA_SHORTCODE="174379"
 MPESA_PASSKEY="bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919"
 MPESA_SHORTCODE_TYPE="Paybill"
-MPESA_CALLBACK_URL = "https://jgf.linkworldcourier.com/api/mpay/callback/"
+MPESA_CALLBACK_URL = "https://jgf.linkworldcargo.com/api/mpay/callback/"
 
 # Site URL
 SITE_URL = "http://localhost:8080"

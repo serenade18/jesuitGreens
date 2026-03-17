@@ -923,12 +923,14 @@ class ActivityLogSerializer(serializers.ModelSerializer):
 
 class ActivityFeedSerializer(serializers.ModelSerializer):
     actor_name = serializers.SerializerMethodField()
+    actor_id = serializers.IntegerField(source="actor.id", read_only=True)
     target_label = serializers.SerializerMethodField()
 
     class Meta:
         model = ActivityLog
         fields = [
             "id",
+            "actor_id",
             "action",
             "description",
             "actor_name",

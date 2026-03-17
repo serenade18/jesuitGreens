@@ -1,15 +1,58 @@
+import sys
+
 from django.contrib.auth import user_logged_in, user_logged_out
 from django.contrib.contenttypes.models import ContentType
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-from greenApp.models import MilkSale, EggSale, GoatMilkSale, CatfishSale, SalaryPayment, Medication, CalvingRecord, \
-    KiddingRecord, Tasks, Inventory, Procurement, ActivityLog
+from greenApp.models import (
+    MilkSale, EggSale, GoatMilkSale, CatfishSale,
+    SalaryPayment, Medication, CalvingRecord,
+    KiddingRecord, Tasks, Inventory, Procurement,
+    ActivityLog
+)
+
 from greenApp.utils.activity import log_activity
 
 
+# -----------------------------------------------------
+# 🔐 Utility Guard: Disable signals during migrations
+# -----------------------------------------------------
+
+def should_skip_signal(sender):
+    """
+    Prevent logging during:
+    - migrations
+    - loaddata
+    - Django internal model saves
+    """
+
+    if "migrate" in sys.argv:
+        return True
+
+    if "loaddata" in sys.argv:
+        return True
+
+    if sender._meta.app_label in (
+        "auth", "admin", "contenttypes", "sessions"
+    ):
+        return True
+
+    if sender == ActivityLog:
+        return True
+
+    return False
+
+
+# -----------------------------------------------------
+# 🔐 Authentication Activity
+# -----------------------------------------------------
+
 @receiver(user_logged_in)
 def log_user_login(sender, request, user, **kwargs):
+    if should_skip_signal(user.__class__):
+        return
+
     ActivityLog.objects.create(
         actor=user,
         action="other",
@@ -21,6 +64,9 @@ def log_user_login(sender, request, user, **kwargs):
 
 @receiver(user_logged_out)
 def log_user_logout(sender, request, user, **kwargs):
+    if should_skip_signal(user.__class__):
+        return
+
     ActivityLog.objects.create(
         actor=user,
         action="other",
@@ -30,11 +76,18 @@ def log_user_logout(sender, request, user, **kwargs):
     )
 
 
+# -----------------------------------------------------
+# 💰 Sales Activity
+# -----------------------------------------------------
+
 @receiver(post_save, sender=MilkSale)
 @receiver(post_save, sender=EggSale)
 @receiver(post_save, sender=GoatMilkSale)
 @receiver(post_save, sender=CatfishSale)
 def sales_activity(sender, instance, created, **kwargs):
+    if should_skip_signal(sender):
+        return
+
     if created:
         log_activity(
             instance=instance,
@@ -47,8 +100,15 @@ def sales_activity(sender, instance, created, **kwargs):
         )
 
 
+# -----------------------------------------------------
+# 💳 Salary Payment
+# -----------------------------------------------------
+
 @receiver(post_save, sender=SalaryPayment)
 def salary_payment_activity(sender, instance, created, **kwargs):
+    if should_skip_signal(sender):
+        return
+
     if created and instance.success:
         log_activity(
             instance=instance.salary,
@@ -62,10 +122,17 @@ def salary_payment_activity(sender, instance, created, **kwargs):
         )
 
 
+# -----------------------------------------------------
+# 🐄 Animal Health
+# -----------------------------------------------------
+
 @receiver(post_save, sender=Medication)
 @receiver(post_save, sender=CalvingRecord)
 @receiver(post_save, sender=KiddingRecord)
 def animal_health_activity(sender, instance, created, **kwargs):
+    if should_skip_signal(sender):
+        return
+
     if created:
         log_activity(
             instance=instance.animal,
@@ -74,9 +141,16 @@ def animal_health_activity(sender, instance, created, **kwargs):
         )
 
 
+# -----------------------------------------------------
+# 📦 Inventory
+# -----------------------------------------------------
+
 @receiver(post_save, sender=Inventory)
 @receiver(post_save, sender=Procurement)
 def inventory_activity(sender, instance, created, **kwargs):
+    if should_skip_signal(sender):
+        return
+
     log_activity(
         instance=instance,
         action="inventory",
@@ -88,8 +162,15 @@ def inventory_activity(sender, instance, created, **kwargs):
     )
 
 
+# -----------------------------------------------------
+# 📝 Tasks
+# -----------------------------------------------------
+
 @receiver(post_save, sender=Tasks)
 def task_activity(sender, instance, created, **kwargs):
+    if should_skip_signal(sender):
+        return
+
     log_activity(
         instance=instance,
         action="task",
@@ -98,14 +179,13 @@ def task_activity(sender, instance, created, **kwargs):
     )
 
 
+# -----------------------------------------------------
+# 🌍 Global Create / Update Logger
+# -----------------------------------------------------
+
 @receiver(post_save)
 def global_create_update_logger(sender, instance, created, **kwargs):
-    if sender == ActivityLog:
-        return
-
-    if sender._meta.app_label in (
-        "auth", "admin", "contenttypes", "sessions"
-    ):
+    if should_skip_signal(sender):
         return
 
     EXCLUDED_MODELS = {
