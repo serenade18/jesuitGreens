@@ -15,7 +15,7 @@ from greenApp.models import TeamRoles, Farm, NotificationPreference, Notificatio
     CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
     DairyGoatFeedingSchedule, DairyGoatFeedingRecord, BirdsFeedingSchedule, BirdsFeedingRecord, MpesaPayment, \
     FarmVisitBooking, FarmPlants, Plot, CropPlanting, CropHarvest, IrrigationSchedule, FertilizerApplication, \
-    PesticideApplication, VaccinationRecord, CropSale, ActivityLog
+    PesticideApplication, VaccinationRecord, CropSale, ActivityLog, PoultryVaccinationRecord
 
 User = get_user_model()
 
@@ -956,3 +956,15 @@ class ActivityLogFilterSerializer(serializers.Serializer):
     end_date = serializers.DateField(required=False)
 
 
+
+class PoultryVaccinationRecordSerializer(serializers.ModelSerializer):
+    batch = PoultryRecordSerializer(read_only=True)
+    batch_id = serializers.PrimaryKeyRelatedField(
+        queryset=PoultryBatch.objects.all(),
+        source="batch",
+        write_only=True
+    )
+
+    class Meta:
+        model = PoultryVaccinationRecord
+        fields = "__all__"

@@ -1357,8 +1357,8 @@ class VaccinationRecord(models.Model):
         choices=ROUTE_CHOICES
     )
     administered_by = models.CharField(max_length=100)
-    milk_withdrawal_days = models.PositiveIntegerField()
-    meat_withdrawal_days = models.PositiveIntegerField()
+    milk_withdrawal_days = models.PositiveIntegerField(null=True, blank=True)
+    meat_withdrawal_days = models.PositiveIntegerField(null=True, blank=True)
     next_booster_date = models.DateField()
     added_on = models.DateTimeField(auto_now_add=True)
     objects = models.Manager()
@@ -1449,3 +1449,49 @@ class ActivityLog(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
+
+# Poultry vaccination model
+class PoultryVaccinationRecord(models.Model):
+    ROUTE_CHOICES = (
+        ("DW", "Drinking Water"),
+        ("SP", "Spray"),
+        ("ED", "Eye Drop"),
+        ("IM", "Intramuscular"),
+        ("SC", "Subcutaneous"),
+    )
+    batch = models.ForeignKey(
+        "PoultryBatch",
+        on_delete=models.CASCADE,
+        related_name="vaccinations"
+    )
+    date_administered = models.DateField()
+    vaccine_name = models.CharField(max_length=255)
+    dosage = models.CharField(
+        max_length=150,
+        help_text="E.g. 1 vial per 1000 birds, per litre, etc."
+    )
+    route = models.CharField(
+        max_length=2,
+        choices=ROUTE_CHOICES
+    )
+    administered_by = models.CharField(max_length=100)
+    # Poultry-specific critical field
+    age_in_days = models.PositiveIntegerField(
+        help_text="Age of birds at time of vaccination"
+    )
+    # Withdrawal (important for eggs/meat safety)
+    withdrawal_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Egg/meat withdrawal period"
+    )
+    next_booster_date = models.DateField(
+        null=True,
+        blank=True
+    )
+    notes = models.TextField(blank=True, null=True)
+    added_on = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()
+
+    def __str__(self):
+        return f"{self.batch} - {self.vaccine_name}"

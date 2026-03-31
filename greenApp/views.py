@@ -34,7 +34,7 @@ from greenApp.models import UserAccount, TeamRoles, Farm, NotificationPreference
     CatfishBatch, CatfishSale, FeedingSchedule, FeedingRecord, DairyCattleFeedingSchedule, DairyCattleFeedingRecord, \
     DairyGoatFeedingSchedule, DairyGoatFeedingRecord, MpesaPayment, FarmVisitBooking, BirdsFeedingSchedule, \
     BirdsFeedingRecord, FarmPlants, Plot, CropPlanting, CropHarvest, IrrigationSchedule, FertilizerApplication, \
-    PesticideApplication, Payment, VaccinationRecord, CropSale, ActivityLog
+    PesticideApplication, Payment, VaccinationRecord, CropSale, ActivityLog, PoultryVaccinationRecord
 
 from greenApp.permissions import IsAdminRole, IsFarmManagerRole, IsTeamMemberRole
 
@@ -51,7 +51,8 @@ from greenApp.serializers import UserAccountSerializer, UserCreateSerializer, Te
     MpesaPaymentSerializer, BookingsSerializer, BirdsFeedingScheduleSerializer, BirdsFeedingRecordSerializer, \
     FarmPlantsSerializer, PlotSerializer, CropPlantingSerializer, CropHarvestSerializer, IrrigationScheduleSerializer, \
     FertilizerApplicationSerializer, PesticideApplicationSerializer, PaymentSerializer, VaccinationRecordSerializer, \
-    CropSaleSerializer, ActivityFeedSerializer, ActivityLogFilterSerializer, ActivityLogSerializer
+    CropSaleSerializer, ActivityFeedSerializer, ActivityLogFilterSerializer, ActivityLogSerializer, \
+    PoultryVaccinationRecordSerializer
 
 from .services import MpesaService
 
@@ -8221,3 +8222,208 @@ class ActivityLogViewSet(viewsets.ViewSet):
             "data": serializer.data
         }, status=status.HTTP_200_OK)
 
+
+# Poultry vaccination viewSet
+class PoultryVaccinationRecordViewSet(viewsets.ViewSet):
+    permission_classes_by_action = {
+        'create': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'list': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'retrieve': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'partial_update': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'destroy': [IsAdminRole, IsFarmManagerRole, IsTeamMemberRole],
+        'default': [IsAuthenticated],
+    }
+
+    def get_permissions(self):
+        perms = self.permission_classes_by_action.get(
+            self.action,
+            self.permission_classes_by_action['default']
+        )
+
+        def has_any_permission(request, view):
+            return any(p().has_permission(request, view) for p in perms)
+
+        class AnyPermission(BasePermission):
+            def has_permission(self, request, view):
+                return has_any_permission(request, view)
+
+        return [AnyPermission()]
+
+    # -------------------------
+    # LIST
+    # -------------------------
+    def list(self, request):
+        try:
+            queryset = PoultryVaccinationRecord.objects.select_related('batch').all()
+
+            batch_id = request.query_params.get('batch_id')
+            if batch_id:
+                queryset = queryset.filter(batch_id=batch_id)
+
+            records = queryset.order_by('-id')
+            serializer = PoultryVaccinationRecordSerializer(records, many=True)
+
+            return Response({
+                "error": False,
+                "message": "Poultry vaccination records retrieved",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # CREATE
+    # -------------------------
+    def create(self, request):
+        serializer = PoultryVaccinationRecordSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response({
+                "error": True,
+                "message": "Invalid data",
+                "details": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        record = serializer.save()
+
+        return Response({
+            "error": False,
+            "message": "Poultry vaccination record created successfully",
+            "data": PoultryVaccinationRecordSerializer(record).data
+        }, status=status.HTTP_201_CREATED)
+
+    # -------------------------
+    # RETRIEVE
+    # -------------------------
+    def retrieve(self, request, pk=None):
+        try:
+            record = PoultryVaccinationRecord.objects.get(pk=pk)
+            serializer = PoultryVaccinationRecordSerializer(record)
+
+            return Response({
+                "error": False,
+                "message": "Poultry vaccination record retrieved",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except PoultryVaccinationRecord.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Poultry vaccination record not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # UPDATE
+    # -------------------------
+    def update(self, request, pk=None):
+        try:
+            record = PoultryVaccinationRecord.objects.get(pk=pk)
+            serializer = PoultryVaccinationRecordSerializer(record, data=request.data)
+
+            if not serializer.is_valid():
+                return Response({
+                    "error": True,
+                    "message": "Invalid data",
+                    "details": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Poultry vaccination record updated successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except PoultryVaccinationRecord.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Poultry vaccination record not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # PARTIAL UPDATE
+    # -------------------------
+    def partial_update(self, request, pk=None):
+        try:
+            record = PoultryVaccinationRecord.objects.get(pk=pk)
+            serializer = PoultryVaccinationRecordSerializer(
+                record,
+                data=request.data,
+                partial=True
+            )
+
+            if not serializer.is_valid():
+                return Response({
+                    "error": True,
+                    "message": "Invalid data",
+                    "details": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer.save()
+
+            return Response({
+                "error": False,
+                "message": "Poultry vaccination record partially updated",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except PoultryVaccinationRecord.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Poultry vaccination record not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # -------------------------
+    # DELETE
+    # -------------------------
+    def destroy(self, request, pk=None):
+        try:
+            record = PoultryVaccinationRecord.objects.get(pk=pk)
+            record.delete()
+
+            return Response({
+                "error": False,
+                "message": "Poultry vaccination record deleted successfully",
+                "data": []
+            }, status=status.HTTP_200_OK)
+
+        except PoultryVaccinationRecord.DoesNotExist:
+            return Response({
+                "error": True,
+                "message": "Poultry vaccination record not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "error": True,
+                "message": "An error occurred",
+                "details": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
