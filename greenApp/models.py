@@ -842,7 +842,7 @@ class Expense(models.Model):
     objects = models.Manager()
 
     def __str__(self):
-        return f"{self.provider_name} ({self.expense_type}) - {self.amount} KES"
+        return f"{self.name} ({self.category}) - {self.amount} KES"
 
 
 # Recurring Expense
